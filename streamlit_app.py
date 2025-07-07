@@ -19,179 +19,73 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📊 Dashboard Prediksi Harga Daging Ayam Broiler - Jawa Timur")
+st.title(":bar_chart: Dashboard Prediksi Harga Daging Ayam Broiler - Jawa Timur")
 
 # Tabs
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "📂 Dataset", 
     "⚙️ Preprocessing", 
-    "📈 Visualisasi", 
     "🤖 Model", 
-    "📉 Hasil Prediksi"
+    "📉 Evaluasi"
 ])
 
 # Tab 1 - Dataset
 with tab1:
-    st.header("📂 Dataset")
-
-    required_columns = [
-        'Date',
-        'Harga Pakan Ternak Broiler',
-        'Harga DOC Broiler',
-        'Harga Jagung TK Peternak',
-        'Harga Daging Ayam Broiler'
-    ]
+    st.header(":file_folder: Dataset")
 
     uploaded_file = st.file_uploader("Upload Dataset Excel (.xlsx)", type=["xlsx"])
 
     if uploaded_file:
-        try:
-            df = pd.read_excel(uploaded_file)
-            missing_cols = [col for col in required_columns if col not in df.columns]
-
-            if missing_cols:
-                st.error(f"❌ Kolom berikut tidak ditemukan di file Excel: {', '.join(missing_cols)}")
-            else:
-                # Konversi kolom numerik
-                for col in df.columns:
-                    if col != 'Date':
-                        df[col] = pd.to_numeric(df[col], errors='coerce')
-
-                st.session_state['df'] = df
-                st.success("✅ Dataset valid!")
-                st.write("Data Preview:")
-                st.dataframe(df.head())
-
-                with st.expander("📊 Deskripsi Statistik"):
-                    st.dataframe(df.describe())
-
-        except Exception as e:
-            st.error(f"❌ Gagal membaca file Excel. Error: {e}")
+        df = pd.read_excel(uploaded_file)
+        st.session_state['df_raw'] = df.copy()
+        st.write("Data Preview:")
+        st.dataframe(df.head())
+        st.write("Deskripsi Statistik:")
+        st.dataframe(df.describe())
     else:
-        st.info("Silakan upload file Excel (.xlsx) yang berisi semua variabel yang dibutuhkan.")
+        st.info("Silakan upload file Excel (.xlsx)")
 
 # Tab 2 - Preprocessing
 with tab2:
-    st.header("⚙️ Preprocessing Data")
+    st.header(":gear: Preprocessing")
 
-    if 'df' in st.session_state:
-        df = st.session_state['df'].copy()
+    if 'df_raw' in st.session_state:
+        df = st.session_state['df_raw'].copy()
 
-        st.subheader("1️⃣ Pembersihan Nama Kolom")
-        df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
-        st.write("Nama kolom setelah dibersihkan:")
-        st.write(df.columns.tolist())
+        # Feature engineering manual
+        df['rasio_pakan_daging'] = df['Harga Pakan Ternak Broiler'] / df['Harga Daging Ayam Broiler']
+        df['rasio_doc_daging'] = df['Harga DOC Broiler'] / df['Harga Daging Ayam Broiler']
+        df['rasio_jagung_pakan'] = df['Harga Jagung TK Peternak'] / df['Harga Pakan Ternak Broiler']
 
-        df.rename(columns={
-            'harga_pakan_ternak_broiler': 'pakan',
-            'harga_doc_broiler': 'doc',
-            'harga_jagung_tk_peternak': 'jagung',
-            'harga_daging_ayam_broiler': 'daging',
-            'date': 'tanggal'
-        }, inplace=True)
+        df['ma7_daging'] = df['Harga Daging Ayam Broiler'].rolling(window=7).mean()
+        df['ma7_pakan'] = df['Harga Pakan Ternak Broiler'].rolling(window=7).mean()
+        df['ma7_doc'] = df['Harga DOC Broiler'].rolling(window=7).mean()
+        df['ma7_jagung'] = df['Harga Jagung TK Peternak'].rolling(window=7).mean()
 
-        st.subheader("2️⃣ Missing Values")
-
-        kolom_target = ['pakan', 'doc', 'jagung', 'daging']
-        missing_before = df[kolom_target].isna().sum()
-
-        # Tangani missing value
-        df[kolom_target] = df[kolom_target].interpolate(method='linear')
-        for col in kolom_target:
-            df[col].fillna(method='ffill', inplace=True)
-            df[col].fillna(method='bfill', inplace=True)
-
-        missing_after = df[kolom_target].isna().sum()
-
-        # Tampilkan perbandingan
-        missing_df = pd.DataFrame({
-            "Sebelum": missing_before,
-            "Sesudah": missing_after
-        })
-
-        st.write("Jumlah missing value sebelum dan sesudah penanganan:")
-        st.dataframe(missing_df)
-
-        st.subheader("3️⃣ Deteksi Outlier (IQR)")
-        Q1 = df[kolom_target].quantile(0.25)
-        Q3 = df[kolom_target].quantile(0.75)
-        IQR = Q3 - Q1
-        outliers = (df[kolom_target] < (Q1 - 1.5 * IQR)) | (df[kolom_target] > (Q3 + 1.5 * IQR))
-        st.write("Jumlah outlier per kolom:")
-        st.dataframe(outliers.sum())
-
-        fig_outlier, ax = plt.subplots(figsize=(10, 5))
-        sns.boxplot(data=df[kolom_target], orient='h', palette='Set2', ax=ax)
-        ax.set_title("Boxplot Deteksi Outlier")
-        st.pyplot(fig_outlier)
-
-        st.subheader("4️⃣ Transformasi Log")
-        for col in kolom_target:
-            df[f"{col}_log"] = np.log(df[col])
-
-        log_cols = [f"{col}_log" for col in kolom_target]
-        st.write("Contoh kolom hasil log transform:")
-        st.dataframe(df[log_cols].head())
-
-        fig_log, axs = plt.subplots(2, 2, figsize=(12, 8))
-        axs = axs.flatten()
-        for i, col in enumerate(log_cols):
-            sns.histplot(df[col], kde=True, color='skyblue', ax=axs[i])
-            axs[i].set_title(f'Distribusi Log: {col}')
-        plt.tight_layout()
-        st.pyplot(fig_log)
-
-        st.session_state['df_clean'] = df
-
-    else:
-        st.warning("Silakan upload dataset di tab 📂 Dataset.")
-
-# Tab 3 - Visualisasi
-with tab3:
-    st.header("📈 Visualisasi Dataset")
-
-    if 'df_clean' in st.session_state:
-        df = st.session_state['df_clean']
-
-        st.subheader("Distribusi Harga Daging")
-        fig1, ax1 = plt.subplots()
-        sns.histplot(df['daging'], kde=True, ax=ax1)
-        st.pyplot(fig1)
-
-        st.subheader("Korelasi antar Fitur")
-        fig2, ax2 = plt.subplots()
-        sns.heatmap(df.corr(numeric_only=True), annot=True, cmap="coolwarm", ax=ax2)
-        st.pyplot(fig2)
-    else:
-        st.warning("Silakan lakukan preprocessing terlebih dahulu.")
-
-# Tab 4 - Prediksi
-with tab4:
-    st.header("📉 Hasil Prediksi")
-
-    if 'df_clean' in st.session_state:
-        df = st.session_state['df_clean']
-
-        # Feature Engineering
-        df['rasio_pakan_daging'] = df['pakan'] / df['daging']
-        df['rasio_doc_daging'] = df['doc'] / df['daging']
-        df['rasio_jagung_pakan'] = df['jagung'] / df['pakan']
-        df['ma7_daging'] = df['daging'].rolling(window=7).mean()
-        df['ma7_pakan'] = df['pakan'].rolling(window=7).mean()
-        df['ma7_doc'] = df['doc'].rolling(window=7).mean()
-        df['ma7_jagung'] = df['jagung'].rolling(window=7).mean()
-        df['lag1_daging'] = df['daging'].shift(1)
-        df['lag2_daging'] = df['daging'].shift(2)
-        df['pct_change_daging'] = df['daging'].pct_change()
+        df['lag1_daging'] = df['Harga Daging Ayam Broiler'].shift(1)
+        df['lag2_daging'] = df['Harga Daging Ayam Broiler'].shift(2)
+        df['pct_change_daging'] = df['Harga Daging Ayam Broiler'].pct_change()
 
         df.dropna(inplace=True)
+        st.session_state['df_clean'] = df.copy()
+        st.success("Preprocessing selesai.")
+        st.dataframe(df.head())
+    else:
+        st.warning("Silakan upload dataset terlebih dahulu.")
+
+# Tab 3 - Model
+with tab3:
+    st.header(":robot_face: Pelatihan Model XGBoost")
+
+    if 'df_clean' in st.session_state:
+        df = st.session_state['df_clean']
 
         fitur = [
             'rasio_pakan_daging', 'rasio_doc_daging', 'rasio_jagung_pakan',
             'ma7_daging', 'ma7_pakan', 'ma7_doc', 'ma7_jagung',
             'lag1_daging', 'lag2_daging', 'pct_change_daging'
         ]
-        target = 'daging'
+        target = 'Harga Daging Ayam Broiler'
 
         X = df[fitur]
         y = df[target]
@@ -225,34 +119,55 @@ with tab4:
             rmse = np.sqrt(mean_squared_error(y_test, preds))
             return rmse
 
-        study = optuna.create_study(
-            direction='minimize',
-            sampler=TPESampler(seed=42),
-            pruner=MedianPruner(n_warmup_steps=10)
-        )
-        study.optimize(objective, n_trials=100)
+        with st.spinner("Menjalankan tuning Optuna..."):
+            study = optuna.create_study(
+                direction='minimize',
+                sampler=TPESampler(seed=42),
+                pruner=MedianPruner(n_warmup_steps=10)
+            )
+            study.optimize(objective, n_trials=50)
 
         best_model = XGBRegressor(**study.best_params, random_state=42)
         best_model.fit(X_train_scaled, y_train)
         y_pred_best = best_model.predict(X_test_scaled)
 
-        rmse_default = np.sqrt(mean_squared_error(y_test, y_pred_default))
-        mape_default = mean_absolute_percentage_error(y_test, y_pred_default) * 100
+        def evaluate_model(y_true, y_pred):
+            rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+            mape = mean_absolute_percentage_error(y_true, y_pred) * 100
+            return rmse, mape
 
-        rmse_best = np.sqrt(mean_squared_error(y_test, y_pred_best))
-        mape_best = mean_absolute_percentage_error(y_test, y_pred_best) * 100
+        rmse_default, mape_default = evaluate_model(y_test, y_pred_default)
+        rmse_best, mape_best = evaluate_model(y_test, y_pred_best)
 
-        st.subheader("📊 Evaluasi Model")
-        st.write("[DEFAULT] RMSE:", f"{rmse_default:.2f}", ", MAPE:", f"{mape_default:.2f}%")
-        st.write("[TUNED  ] RMSE:", f"{rmse_best:.2f}", ", MAPE:", f"{mape_best:.2f}%")
+        st.success("Model berhasil dilatih!")
+        st.code("""
+=== PERBANDINGAN XGBOOST DEFAULT vs TUNED (OPTUNA) ===
+[DEFAULT] RMSE: {:.2f}, MAPE: {:.2f}%
+[TUNED  ] RMSE: {:.2f}, MAPE: {:.2f}%
+""".format(rmse_default, mape_default, rmse_best, mape_best))
 
-        fig_pred, ax_pred = plt.subplots(figsize=(10, 5))
-        ax_pred.plot(y_test.values, label="Aktual", linewidth=2)
-        ax_pred.plot(y_pred_default, label="Prediksi Default", linestyle='--')
-        ax_pred.plot(y_pred_best, label="Prediksi Tuned", linestyle='--')
-        ax_pred.set_title("Perbandingan Hasil Prediksi")
-        ax_pred.legend()
-        st.pyplot(fig_pred)
+        st.session_state['y_test'] = y_test
+        st.session_state['y_pred_default'] = y_pred_default
+        st.session_state['y_pred_best'] = y_pred_best
 
     else:
-        st.warning("Silakan lakukan preprocessing terlebih dahulu.")
+        st.warning("Preprocessing data diperlukan sebelum melatih model.")
+
+# Tab 4 - Evaluasi
+with tab4:
+    st.header(":chart_with_downwards_trend: Evaluasi Model")
+
+    if all(k in st.session_state for k in ['y_test', 'y_pred_default', 'y_pred_best']):
+        y_test = st.session_state['y_test']
+        y_pred_default = st.session_state['y_pred_default']
+        y_pred_best = st.session_state['y_pred_best']
+
+        fig_eval, ax_eval = plt.subplots()
+        ax_eval.plot(y_test.values, label="Aktual", linewidth=2)
+        ax_eval.plot(y_pred_default, label="Prediksi Default", linestyle='--')
+        ax_eval.plot(y_pred_best, label="Prediksi Tuned", linestyle='--')
+        ax_eval.legend()
+        ax_eval.set_title("Perbandingan Hasil Prediksi")
+        st.pyplot(fig_eval)
+    else:
+        st.warning("Silakan latih model terlebih dahulu.")
