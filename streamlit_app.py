@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -10,10 +11,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# Title
 st.title("📊 Dashboard Prediksi Harga Daging Ayam Broiler - Jawa Timur")
 
-# Tabs
 # Tabs
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📂 Dataset", 
@@ -26,7 +25,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 # Tab 1 - Dataset
 with tab1:
     st.header("📂 Dataset")
-    
+
     required_columns = [
         'Date',
         'Harga Pakan Ternak Broiler',
@@ -45,20 +44,24 @@ with tab1:
             if missing_cols:
                 st.error(f"❌ Kolom berikut tidak ditemukan di file Excel: {', '.join(missing_cols)}")
             else:
-                st.session_state['df'] = df  # Simpan df ke session
+                # Konversi kolom numerik
+                for col in df.columns:
+                    if col != 'Date':
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+                st.session_state['df'] = df
                 st.success("✅ Dataset valid!")
                 st.write("Data Preview:")
                 st.dataframe(df.head())
 
                 with st.expander("📊 Deskripsi Statistik"):
-                    st.write(df.describe())
+                    st.dataframe(df.describe())
 
         except Exception as e:
-            st.error(f"❌ Gagal membaca file Excel. Pastikan formatnya benar. Error: {e}")
+            st.error(f"❌ Gagal membaca file Excel. Error: {e}")
     else:
         st.info("Silakan upload file Excel (.xlsx) yang berisi semua variabel yang dibutuhkan.")
 
-# Tab 2 - Preprocessing
 # Tab 2 - Preprocessing
 with tab2:
     st.header("⚙️ Preprocessing Data")
@@ -71,7 +74,6 @@ with tab2:
         st.write("Kolom setelah dinormalisasi:")
         st.write(df.columns.tolist())
 
-        # Rename untuk kemudahan akses kolom
         df.rename(columns={
             'harga_pakan_ternak_broiler': 'pakan',
             'harga_doc_broiler': 'doc',
@@ -80,36 +82,35 @@ with tab2:
             'date': 'tanggal'
         }, inplace=True)
 
-        st.subheader("2️⃣ Penanganan Missing Values (Interpolasi + Fill)")
+        st.subheader("2️⃣ Penanganan Missing Values")
         kolom_target = ['pakan', 'doc', 'jagung', 'daging']
         df[kolom_target] = df[kolom_target].interpolate(method='linear')
         for col in kolom_target:
             df[col].fillna(method='ffill', inplace=True)
             df[col].fillna(method='bfill', inplace=True)
 
-        st.write("Jumlah missing value setelah penanganan:")
+        st.write("Jumlah missing value:")
         st.dataframe(df.isna().sum())
 
-        st.subheader("3️⃣ Deteksi Outlier dengan IQR")
+        st.subheader("3️⃣ Deteksi Outlier (IQR)")
         Q1 = df[kolom_target].quantile(0.25)
         Q3 = df[kolom_target].quantile(0.75)
         IQR = Q3 - Q1
-
         outliers = (df[kolom_target] < (Q1 - 1.5 * IQR)) | (df[kolom_target] > (Q3 + 1.5 * IQR))
         st.write("Jumlah outlier per kolom:")
         st.dataframe(outliers.sum())
 
-        fig_outlier, ax_outlier = plt.subplots(figsize=(10, 5))
-        sns.boxplot(data=df[kolom_target], orient='h', palette='Set2', ax=ax_outlier)
-        ax_outlier.set_title("Boxplot Deteksi Outlier (IQR)")
+        fig_outlier, ax = plt.subplots(figsize=(10, 5))
+        sns.boxplot(data=df[kolom_target], orient='h', palette='Set2', ax=ax)
+        ax.set_title("Boxplot Deteksi Outlier")
         st.pyplot(fig_outlier)
 
-        st.subheader("4️⃣ Transformasi Data (Log Transform)")
+        st.subheader("4️⃣ Transformasi Log")
         for col in kolom_target:
             df[f"{col}_log"] = np.log(df[col])
 
         log_cols = [f"{col}_log" for col in kolom_target]
-        st.write("Preview Kolom Log:")
+        st.write("Contoh kolom log:")
         st.dataframe(df[log_cols].head())
 
         fig_log, axs = plt.subplots(2, 2, figsize=(12, 8))
@@ -117,15 +118,13 @@ with tab2:
         for i, col in enumerate(log_cols):
             sns.histplot(df[col], kde=True, color='skyblue', ax=axs[i])
             axs[i].set_title(f'Distribusi Log: {col}')
-            axs[i].set_xlabel('Nilai Log')
         plt.tight_layout()
         st.pyplot(fig_log)
 
-        # Simpan hasil preprocessing ke session
         st.session_state['df_clean'] = df
 
     else:
-        st.warning("Silakan upload dataset terlebih dahulu di tab 📂 Dataset.")
+        st.warning("Silakan upload dataset di tab 📂 Dataset.")
 
 # Tab 3 - Visualisasi
 with tab3:
@@ -134,9 +133,9 @@ with tab3:
     if 'df_clean' in st.session_state:
         df = st.session_state['df_clean']
 
-        st.subheader("Distribusi Harga Daging Ayam Broiler")
+        st.subheader("Distribusi Harga Daging")
         fig1, ax1 = plt.subplots()
-        sns.histplot(df['harga_daging_ayam_broiler'], kde=True, ax=ax1)
+        sns.histplot(df['daging'], kde=True, ax=ax1)
         st.pyplot(fig1)
 
         st.subheader("Korelasi antar Fitur")
@@ -146,26 +145,26 @@ with tab3:
     else:
         st.warning("Silakan lakukan preprocessing terlebih dahulu.")
 
-# Tab 4 - Hasil Prediksi
+# Tab 4 - Prediksi
 with tab4:
     st.header("📉 Hasil Prediksi")
 
-    if 'df' in locals():
-        st.subheader("Prediksi Harga Daging Ayam")
+    if 'df_clean' in st.session_state:
+        df = st.session_state['df_clean']
 
-        # Simulasi hasil prediksi
+        st.subheader("Simulasi Prediksi Harga Daging")
         df_pred = df.copy()
-        df_pred['pred_xgb'] = df['harga_daging_ayam'] * 0.95  # Simulasi prediksi XGBoost
-        df_pred['pred_xgb_optuna'] = df['harga_daging_ayam'] * 0.97  # Simulasi prediksi Optuna
+        df_pred['pred_xgb'] = df['daging'] * 0.95
+        df_pred['pred_optuna'] = df['daging'] * 0.97
 
-        fig3, ax3 = plt.subplots(figsize=(10, 4))
-        ax3.plot(df['tanggal'], df['harga_daging_ayam'], label='Aktual', linewidth=2)
-        ax3.plot(df['tanggal'], df_pred['pred_xgb'], label='Prediksi XGBoost', linestyle='--')
-        ax3.plot(df['tanggal'], df_pred['pred_xgb_optuna'], label='Prediksi XGBoost + Optuna', linestyle='--')
-        ax3.set_xlabel("Tanggal")
-        ax3.set_ylabel("Harga")
-        ax3.legend()
-        ax3.set_title("Perbandingan Harga Aktual vs Prediksi")
-        st.pyplot(fig3)
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.plot(df['tanggal'], df['daging'], label='Aktual', linewidth=2)
+        ax.plot(df['tanggal'], df_pred['pred_xgb'], label='Prediksi XGBoost', linestyle='--')
+        ax.plot(df['tanggal'], df_pred['pred_optuna'], label='XGBoost + Optuna', linestyle='--')
+        ax.set_title("Perbandingan Harga Aktual vs Prediksi")
+        ax.set_xlabel("Tanggal")
+        ax.set_ylabel("Harga")
+        ax.legend()
+        st.pyplot(fig)
     else:
-        st.warning("Upload dataset terlebih dahulu untuk melihat hasil prediksi.")
+        st.warning("Silakan lakukan preprocessing terlebih dahulu.")
