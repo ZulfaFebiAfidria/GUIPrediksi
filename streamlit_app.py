@@ -168,7 +168,6 @@ with tab4:
     if 'df_clean' in st.session_state:
         df = st.session_state['df_clean']
 
-        # Feature engineering tambahan
         df['rasio_pakan_daging'] = df['pakan'] / df['daging']
         df['rasio_doc_daging'] = df['doc'] / df['daging']
         df['rasio_jagung_pakan'] = df['jagung'] / df['pakan']
