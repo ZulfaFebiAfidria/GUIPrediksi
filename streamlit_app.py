@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Page setup
+# Konfigurasi halaman
 st.set_page_config(
     page_title="Prediksi Harga Daging Ayam Broiler - Jawa Timur",
     page_icon="🍗",
@@ -69,7 +69,20 @@ with tab2:
     if 'df' in st.session_state:
         df = st.session_state['df'].copy()
 
-        st.subheader("1️⃣Penanganan Missing Values")
+        st.subheader("1️⃣ Pembersihan Nama Kolom")
+        df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
+        st.write("Nama kolom setelah dibersihkan:")
+        st.write(df.columns.tolist())
+
+        df.rename(columns={
+            'harga_pakan_ternak_broiler': 'pakan',
+            'harga_doc_broiler': 'doc',
+            'harga_jagung_tk_peternak': 'jagung',
+            'harga_daging_ayam_broiler': 'daging',
+            'date': 'tanggal'
+        }, inplace=True)
+
+        st.subheader("2️⃣ Penanganan Missing Values")
         kolom_target = ['pakan', 'doc', 'jagung', 'daging']
         df[kolom_target] = df[kolom_target].interpolate(method='linear')
         for col in kolom_target:
@@ -79,7 +92,7 @@ with tab2:
         st.write("Jumlah missing value:")
         st.dataframe(df.isna().sum())
 
-        st.subheader("2️⃣Deteksi Outlier (IQR)")
+        st.subheader("3️⃣ Deteksi Outlier (IQR)")
         Q1 = df[kolom_target].quantile(0.25)
         Q3 = df[kolom_target].quantile(0.75)
         IQR = Q3 - Q1
@@ -92,12 +105,12 @@ with tab2:
         ax.set_title("Boxplot Deteksi Outlier")
         st.pyplot(fig_outlier)
 
-        st.subheader("3️⃣Transformasi Log")
+        st.subheader("4️⃣ Transformasi Log")
         for col in kolom_target:
             df[f"{col}_log"] = np.log(df[col])
 
         log_cols = [f"{col}_log" for col in kolom_target]
-        st.write("Contoh kolom log:")
+        st.write("Contoh kolom hasil log transform:")
         st.dataframe(df[log_cols].head())
 
         fig_log, axs = plt.subplots(2, 2, figsize=(12, 8))
