@@ -3,149 +3,95 @@ import pandas as pd
 import math
 from pathlib import Path
 
-# Set the title and favicon that appear in the Browser's tab bar.
+import streamlit as st
+import pandas as pd
+
+# Konfigurasi halaman
 st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+    page_title="Aplikasi Prediksi AA",
+    page_icon="🧠",
+    layout="centered"
 )
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+# CSS Tampilan
+st.markdown("""
+    <style>
+    .judul-utama {
+        text-align: center;
+        font-size: 40px;
+        font-weight: bold;
+        color: #1f77b4;
+        margin-top: 30px;
+    }
+    .deskripsi {
+        text-align: center;
+        font-size: 18px;
+        color: #555;
+        margin-bottom: 40px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+# Inisialisasi page state
+if "page" not in st.session_state:
+    st.session_state.page = "home"
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+# --------------------------
+# Halaman 1: Halaman Awal
+# --------------------------
+def halaman_utama():
+    st.markdown('<div class="judul-utama">Selamat Datang di Aplikasi Prediksi AA</div>', unsafe_allow_html=True)
+    st.markdown('<div class="deskripsi">Silakan klik tombol di bawah untuk memulai.</div>', unsafe_allow_html=True)
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🚀 Lanjut ke Halaman Berikutnya", use_container_width=True):
+            st.session_state.page = "halaman_berikutnya"
+            st.experimental_rerun()
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+# --------------------------
+# Halaman 2: Upload + Parameter
+# --------------------------
+def halaman_berikutnya():
+    st.markdown('<div class="judul-utama">📊 Halaman Input Data dan Parameter</div>', unsafe_allow_html=True)
+    st.markdown('<div class="deskripsi">Silakan upload file data dan isi parameter yang diperlukan untuk proses prediksi.</div>', unsafe_allow_html=True)
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
+    # Upload file
+    uploaded_file = st.file_uploader("📁 Upload file CSV atau Excel", type=["csv", "xlsx"], key="file_input")
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+    if uploaded_file is not None:
+        try:
+            if uploaded_file.name.endswith('.csv'):
+                df = pd.read_csv(uploaded_file)
+            else:
+                df = pd.read_excel(uploaded_file)
+            st.success("✅ File berhasil diunggah dan dibaca.")
+            st.dataframe(df)
+        except Exception as e:
+            st.error(f"❌ Gagal membaca file: {e}")
 
-    return gdp_df
+    st.markdown("---")
 
-gdp_df = get_gdp_data()
+    # Parameter input
+    st.subheader("🛠️ Parameter Prediksi")
+    pilihan_model = st.selectbox("Pilih Model Prediksi", ["Naive Bayes", "Random Forest", "K-Nearest Neighbors"])
+    threshold = st.slider("Threshold Keputusan", 0.0, 1.0, 0.5, 0.05)
+    nama_model = st.text_input("Nama Model (opsional)", placeholder="Contoh: Model Percobaan 1")
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
+    st.markdown("---")
 
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
+    # Tombol kembali
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🔙 Kembali ke Beranda", use_container_width=True):
+            st.session_state.page = "home"
+            st.experimental_rerun()
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
+# --------------------------
+# Routing Halaman
+# --------------------------
+if st.session_state.page == "home":
+    halaman_utama()
+elif st.session_state.page == "halaman_berikutnya":
+    halaman_berikutnya()
 
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
