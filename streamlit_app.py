@@ -82,15 +82,27 @@ with tab2:
             'date': 'tanggal'
         }, inplace=True)
 
-        st.subheader("2️⃣ Penanganan Missing Values")
+        st.subheader("2️⃣ Missing Values")
+
         kolom_target = ['pakan', 'doc', 'jagung', 'daging']
+        missing_before = df[kolom_target].isna().sum()
+
+        # Tangani missing value
         df[kolom_target] = df[kolom_target].interpolate(method='linear')
         for col in kolom_target:
             df[col].fillna(method='ffill', inplace=True)
             df[col].fillna(method='bfill', inplace=True)
 
-        st.write("Jumlah missing value:")
-        st.dataframe(df.isna().sum())
+        missing_after = df[kolom_target].isna().sum()
+
+        # Tampilkan perbandingan
+        missing_df = pd.DataFrame({
+            "Sebelum": missing_before,
+            "Sesudah": missing_after
+        })
+
+        st.write("Jumlah missing value sebelum dan sesudah penanganan:")
+        st.dataframe(missing_df)
 
         st.subheader("3️⃣ Deteksi Outlier (IQR)")
         Q1 = df[kolom_target].quantile(0.25)
