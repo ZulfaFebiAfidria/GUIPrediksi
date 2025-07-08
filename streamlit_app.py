@@ -33,61 +33,28 @@ with tab1:
 
     required_columns = [
         'Date', 'Harga Pakan Ternak Broiler', 'Harga DOC Broiler',
-        'Harga Jagung TK Peternak', 'Harga Daging Ayam Broiler'
-    ]
+        'Harga Jagung TK Peternak', 'Harga Daging Ayam Broiler']
 
     uploaded_file = st.file_uploader("Upload Dataset Excel (.xlsx)", type=["xlsx"])
 
     if uploaded_file:
         try:
-            # Baca data
             df = pd.read_excel(uploaded_file)
-
-            # Cek apakah semua kolom penting tersedia
             missing_cols = [col for col in required_columns if col not in df.columns]
+
             if missing_cols:
                 st.error(f"Kolom tidak ditemukan: {', '.join(missing_cols)}")
             else:
-                # Format angka: hilangkan koma dan spasi jika ada
-                for col in ['Harga Jagung TK Peternak', 'Harga Daging Ayam Broiler']:
-                    if col in df.columns:
-                        df[col] = pd.to_numeric(
-                            df[col].astype(str).str.replace(',', '').str.strip(),
-                            errors='coerce'
-                        )
+                for col in df.columns:
+                    if col != 'Date':
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
 
-                # Simpan ke session
-                st.session_state['df'] = df.copy()
-
+                st.session_state['df'] = df
                 st.success("✅ Dataset valid! Lanjut ke tab preprocessing.")
                 st.dataframe(df.head())
 
-                # Statistik deskriptif (manual untuk date)
-                st.subheader("📊 Deskripsi Statistik")
-
-                df_copy = df.copy()
-                df_copy['Date'] = pd.to_datetime(df_copy['Date'], errors='coerce')
-
-                # Statistik kolom Date (tanpa datetime_is_numeric)
-                date_stats = {
-                    'count': df_copy['Date'].count(),
-                    'mean': df_copy['Date'].mean(),
-                    'min': df_copy['Date'].min(),
-                    '25%': df_copy['Date'].quantile(0.25),
-                    '50%': df_copy['Date'].quantile(0.5),
-                    '75%': df_copy['Date'].quantile(0.75),
-                    'max': df_copy['Date'].max()
-                }
-                date_stats_df = pd.DataFrame(date_stats, index=['Date'])
-
-                # Statistik kolom numerik
-                num_cols = df_copy.select_dtypes(include=['float64', 'int64']).columns
-                num_stats_df = df_copy[num_cols].describe().T
-
-                # Gabungkan
-                summary_df = pd.concat([date_stats_df, num_stats_df], axis=0)
-                st.dataframe(summary_df)
-
+                with st.expander("📊 Deskripsi Statistik"):
+                    st.dataframe(df.describe())
         except Exception as e:
             st.error(f"Gagal membaca file: {e}")
     else:
