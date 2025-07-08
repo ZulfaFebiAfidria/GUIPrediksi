@@ -48,36 +48,52 @@ with tab1:
             if missing_cols:
                 st.error(f"Kolom tidak ditemukan: {', '.join(missing_cols)}")
             else:
-                # Simpan ke session state tanpa ubah data
+                # Format angka: hilangkan koma dan spasi jika ada
+                for col in ['Harga Jagung TK Peternak', 'Harga Daging Ayam Broiler']:
+                    if col in df.columns:
+                        df[col] = pd.to_numeric(
+                            df[col].astype(str).str.replace(',', '').str.strip(),
+                            errors='coerce'
+                        )
+
+                # Simpan ke session
                 st.session_state['df'] = df.copy()
 
                 st.success("✅ Dataset valid! Lanjut ke tab preprocessing.")
                 st.dataframe(df.head())
 
-                # Tampilkan deskripsi statistik seperti di Colab
+                # Statistik deskriptif (manual untuk date)
                 st.subheader("📊 Deskripsi Statistik")
 
-                # Pisahkan kolom date dan kolom numerik
                 df_copy = df.copy()
-                if 'Date' in df_copy.columns:
-                    df_copy['Date'] = pd.to_datetime(df_copy['Date'], errors='coerce')
+                df_copy['Date'] = pd.to_datetime(df_copy['Date'], errors='coerce')
 
-                # Statistik kolom date
-                date_stats = df_copy['Date'].describe(datetime_is_numeric=True).to_frame().T
-                date_stats.index = ['Date']
+                # Statistik kolom Date (tanpa datetime_is_numeric)
+                date_stats = {
+                    'count': df_copy['Date'].count(),
+                    'mean': df_copy['Date'].mean(),
+                    'min': df_copy['Date'].min(),
+                    '25%': df_copy['Date'].quantile(0.25),
+                    '50%': df_copy['Date'].quantile(0.5),
+                    '75%': df_copy['Date'].quantile(0.75),
+                    'max': df_copy['Date'].max()
+                }
+                date_stats_df = pd.DataFrame(date_stats, index=['Date'])
 
                 # Statistik kolom numerik
                 num_cols = df_copy.select_dtypes(include=['float64', 'int64']).columns
-                num_stats = df_copy[num_cols].describe().T
+                num_stats_df = df_copy[num_cols].describe().T
 
                 # Gabungkan
-                summary_df = pd.concat([date_stats, num_stats], axis=0)
+                summary_df = pd.concat([date_stats_df, num_stats_df], axis=0)
                 st.dataframe(summary_df)
+
         except Exception as e:
             st.error(f"Gagal membaca file: {e}")
     else:
         if 'df' not in st.session_state:
             st.info("Silakan upload dataset terlebih dahulu.")
+
 
 # ======================== TAB 2 ========================
 with tab2:
