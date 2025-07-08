@@ -50,17 +50,18 @@ with tab1:
                         df[col] = pd.to_numeric(df[col], errors='coerce')
 
                 st.session_state['df'] = df
-                st.success("Dataset valid!")
+                st.success("✅ Dataset valid! Lanjut ke tab preprocessing.")
                 st.dataframe(df.head())
 
-                with st.expander("Deskripsi Statistik"):
+                with st.expander("📊 Deskripsi Statistik"):
                     st.dataframe(df.describe())
-
         except Exception as e:
             st.error(f"Gagal membaca file: {e}")
+    else:
+        if 'df' not in st.session_state:
+            st.info("Silakan upload dataset terlebih dahulu.")
 
 # ======================== TAB 2 ========================
-# Tab 2 - Preprocessing
 with tab2:
     st.header("⚙ Preprocessing Data")
 
@@ -69,8 +70,7 @@ with tab2:
 
         st.subheader("1️⃣ Pembersihan Nama Kolom")
         df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
-        st.write("Nama kolom setelah dibersihkan:")
-        st.write(df.columns.tolist())
+        st.write("Nama kolom setelah dibersihkan:", df.columns.tolist())
 
         df.rename(columns={
             'harga_pakan_ternak_broiler': 'pakan',
@@ -80,61 +80,52 @@ with tab2:
             'date': 'tanggal'
         }, inplace=True)
 
-        st.subheader("2️⃣ Missing Values")
-
         kolom_target = ['pakan', 'doc', 'jagung', 'daging']
+
+        st.subheader("2️⃣ Penanganan Missing Value")
         missing_before = df[kolom_target].isna().sum()
 
         df[kolom_target] = df[kolom_target].interpolate(method='linear')
         for col in kolom_target:
-            df[col].fillna(method='ffill', inplace=True)
-            df[col].fillna(method='bfill', inplace=True)
+            df[col] = df[col].fillna(method='ffill')
+            df[col] = df[col].fillna(method='bfill')
 
         missing_after = df[kolom_target].isna().sum()
-
-        missing_df = pd.DataFrame({
-            "Sebelum": missing_before,
-            "Sesudah": missing_after
-        })
-
-        st.write("Jumlah missing value sebelum dan sesudah penanganan:")
-        st.dataframe(missing_df)
+        st.dataframe(pd.DataFrame({"Sebelum": missing_before, "Sesudah": missing_after}))
 
         st.subheader("3️⃣ Deteksi Outlier (IQR)")
         Q1 = df[kolom_target].quantile(0.25)
         Q3 = df[kolom_target].quantile(0.75)
         IQR = Q3 - Q1
-        outliers = (df[kolom_target] < (Q1 - 1.5 * IQR)) | (df[kolom_target] > (Q3 + 1.5 * IQR))
-        st.write("Jumlah outlier per kolom:")
+        outliers = ((df[kolom_target] < (Q1 - 1.5 * IQR)) | (df[kolom_target] > (Q3 + 1.5 * IQR)))
         st.dataframe(outliers.sum())
 
         fig_outlier, ax = plt.subplots(figsize=(10, 5))
         sns.boxplot(data=df[kolom_target], orient='h', palette='Set2', ax=ax)
-        ax.set_title("Boxplot Deteksi Outlier")
         st.pyplot(fig_outlier)
 
         st.subheader("4️⃣ Transformasi Log")
         for col in kolom_target:
             df[f"{col}_log"] = np.log(df[col])
 
-        log_cols = [f"{col}_log" for col in kolom_target]
-        st.write("Contoh kolom hasil log transform:")
-        st.dataframe(df[log_cols].head())
+        st.write("Contoh hasil log transform:")
+        st.dataframe(df[[f"{col}_log" for col in kolom_target]].head())
 
         fig_log, axs = plt.subplots(2, 2, figsize=(12, 8))
         axs = axs.flatten()
-        for i, col in enumerate(log_cols):
-            sns.histplot(df[col], kde=True, color='skyblue', ax=axs[i])
+        for i, col in enumerate([f"{c}_log" for c in kolom_target]):
+            sns.histplot(df[col], kde=True, ax=axs[i], color='skyblue')
             axs[i].set_title(f'Distribusi Log: {col}')
         plt.tight_layout()
         st.pyplot(fig_log)
 
         st.session_state['df_clean'] = df
 
+        st.success("✅ Preprocessing selesai. Lanjut ke tab visualisasi atau model.")
     else:
-        st.warning("Silakan upload dataset di tab 📂 Dataset.")
+        st.warning("⚠ Silakan upload dataset terlebih dahulu di tab 📂 Dataset.")
 
-# ======================== TAB 3 ========================
+# TAB 3 - Visualisasi
 with tab3:
     st.header("📈 Visualisasi Dataset")
 
@@ -161,14 +152,13 @@ with tab3:
     else:
         st.warning("Lakukan preprocessing terlebih dahulu.")
 
-# ======================== TAB 4 ========================
+# TAB 4 - Model
 with tab4:
     st.header("🤖 Model")
 
     if 'df_clean' in st.session_state:
         df = st.session_state['df_clean']
 
-        # Buat fitur
         df['rasio_pakan_daging'] = df['pakan'] / df['daging']
         df['rasio_doc_daging'] = df['doc'] / df['daging']
         df['rasio_jagung_pakan'] = df['jagung'] / df['pakan']
@@ -195,14 +185,12 @@ with tab4:
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
 
-        # Model default
         model_default = XGBRegressor(random_state=42)
         model_default.fit(X_train_scaled, y_train)
         y_pred_default = model_default.predict(X_test_scaled)
         rmse_default = np.sqrt(mean_squared_error(y_test, y_pred_default))
         mape_default = mean_absolute_percentage_error(y_test, y_pred_default) * 100
 
-        # Jalankan tuning Optuna otomatis
         with st.spinner("⚙ Menjalankan tuning Optuna..."):
 
             def objective(trial):
@@ -233,7 +221,6 @@ with tab4:
             rmse_best = np.sqrt(mean_squared_error(y_test, y_pred_best))
             mape_best = mean_absolute_percentage_error(y_test, y_pred_best) * 100
 
-        # Tampilkan perbandingan hasil
         st.success("✅ Model selesai ditraining dan dituning.")
         st.code(f"""
 === PERBANDINGAN XGBOOST DEFAULT vs TUNED (OPTUNA) ===
@@ -243,9 +230,7 @@ with tab4:
     else:
         st.warning("Silakan lakukan preprocessing terlebih dahulu.")
 
-
-
-# ======================== TAB 5 ========================
+# TAB 5 - Prediksi
 with tab5:
     st.header("📉 Hasil Prediksi")
 
