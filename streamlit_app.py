@@ -33,34 +33,45 @@ with tab1:
 
     required_columns = [
         'Date', 'Harga Pakan Ternak Broiler', 'Harga DOC Broiler',
-        'Harga Jagung TK Peternak', 'Harga Daging Ayam Broiler']
+        'Harga Jagung TK Peternak', 'Harga Daging Ayam Broiler'
+    ]
 
     uploaded_file = st.file_uploader("Upload Dataset Excel (.xlsx)", type=["xlsx"])
 
     if uploaded_file:
         try:
             df = pd.read_excel(uploaded_file)
-            missing_cols = [col for col in required_columns if col not in df.columns]
 
+            # Cek apakah semua kolom penting tersedia
+            missing_cols = [col for col in required_columns if col not in df.columns]
             if missing_cols:
                 st.error(f"Kolom tidak ditemukan: {', '.join(missing_cols)}")
             else:
-                for col in df.columns:
-                    if col != 'Date':
-                        df[col] = pd.to_numeric(df[col], errors='coerce')
-
-                st.session_state['df'] = df
+                st.session_state['df'] = df.copy()
                 st.success("✅ Dataset valid! Lanjut ke tab preprocessing.")
                 st.dataframe(df.head())
 
-                with st.expander("📊 Deskripsi Statistik"):
-                    st.dataframe(df.describe())
+                st.subheader("📊 Deskripsi Statistik")
+                # Gabungkan deskripsi statistik numerik dan datetime manual
+                desc = df.describe(include='all').T
+                if 'Date' in df.columns:
+                    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+                    date_stats = {
+                        'count': df['Date'].count(),
+                        'mean': df['Date'].mean(),
+                        'min': df['Date'].min(),
+                        '25%': df['Date'].quantile(0.25),
+                        '50%': df['Date'].quantile(0.5),
+                        '75%': df['Date'].quantile(0.75),
+                        'max': df['Date'].max()
+                    }
+                    desc.loc['Date'] = date_stats
+                st.dataframe(desc)
         except Exception as e:
             st.error(f"Gagal membaca file: {e}")
     else:
         if 'df' not in st.session_state:
             st.info("Silakan upload dataset terlebih dahulu.")
-
 
 # ======================== TAB 2 ========================
 with tab2:
@@ -70,19 +81,22 @@ with tab2:
         df = st.session_state['df'].copy()
 
         df.rename(columns={
-            'harga_pakan_ternak_broiler': 'pakan',
-            'harga_doc_broiler': 'doc',
-            'harga_jagung_tk_peternak': 'jagung',
-            'harga_daging_ayam_broiler': 'daging',
-            'date': 'tanggal'
+            'Harga Pakan Ternak Broiler': 'pakan',
+            'Harga DOC Broiler': 'doc',
+            'Harga Jagung TK Peternak': 'jagung',
+            'Harga Daging Ayam Broiler': 'daging',
+            'Date': 'tanggal'
         }, inplace=True)
 
         kolom_target = ['pakan', 'doc', 'jagung', 'daging']
 
-        # === FIX KONVERSI NUMERIK ===
+        # ✅ Bersihkan koma dan konversi angka
         for col in kolom_target:
             df[col] = df[col].astype(str).str.replace(",", "").str.strip()
             df[col] = pd.to_numeric(df[col], errors='coerce')
+
+        # Konversi tanggal jika belum
+        df['tanggal'] = pd.to_datetime(df['tanggal'], errors='coerce')
 
         st.subheader("2️⃣ Penanganan Missing Value")
         missing_before = df[kolom_target].isna().sum()
@@ -123,9 +137,9 @@ with tab2:
 
         st.session_state['df_clean'] = df
         st.success("✅ Preprocessing selesai. Lanjut ke tab visualisasi atau model.")
-
     else:
         st.warning("⚠ Silakan upload dataset terlebih dahulu di tab 📂 Dataset.")
+
 
 
 
