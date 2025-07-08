@@ -183,7 +183,6 @@ with tab4:
     if 'df_clean' in st.session_state:
         df = st.session_state['df_clean']
 
-        # Feature engineering
         df['rasio_pakan_daging'] = df['pakan'] / df['daging']
         df['rasio_doc_daging'] = df['doc'] / df['daging']
         df['rasio_jagung_pakan'] = df['jagung'] / df['pakan']
@@ -197,7 +196,6 @@ with tab4:
 
         df.dropna(inplace=True)
 
-        # Fitur dan target
         fitur = [
             'rasio_pakan_daging', 'rasio_doc_daging', 'rasio_jagung_pakan',
             'ma7_daging', 'ma7_pakan', 'ma7_doc', 'ma7_jagung',
@@ -208,68 +206,41 @@ with tab4:
         X = df[fitur]
         y = df[target]
 
-        # Split data (tanpa shuffle untuk data time series)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
-        # Standardisasi
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
 
-        # Model default
         model_default = XGBRegressor(random_state=42)
         model_default.fit(X_train_scaled, y_train)
         y_pred_default = model_default.predict(X_test_scaled)
 
-        # Tombol tuning
         if st.button("🔍 Jalankan Tuning Optuna"):
             with st.spinner("Menjalankan tuning Optuna..."):
+                study = optuna.create_study(direction='minimize', sampler=TPESampler(seed=42), pruner=MedianPruner(n_warmup_steps=10))
+                study.optimize(lambda trial: np.sqrt(mean_squared_error(
+                    y_test,
+                    XGBRegressor(
+                        **{
+                            'n_estimators': trial.suggest_int('n_estimators', 100, 500),
+                            'max_depth': trial.suggest_int('max_depth', 3, 10),
+                            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
+                            'subsample': trial.suggest_float('subsample', 0.5, 1.0),
+                            'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
+                            'gamma': trial.suggest_float('gamma', 0, 2),
+                            'reg_alpha': trial.suggest_float('reg_alpha', 0, 2),
+                            'reg_lambda': trial.suggest_float('reg_lambda', 0, 2),
+                            'min_child_weight': trial.suggest_int('min_child_weight', 1, 5),
+                            'objective': 'reg:squarederror'
+                        }, random_state=42
+                    ).fit(X_train_scaled, y_train).predict(X_test_scaled)
+                )), n_trials=5)
 
-                # Fungsi objektif Optuna
-                def objective(trial):
-                    params = {
-                        'n_estimators': trial.suggest_int('n_estimators', 100, 1000),
-                        'max_depth': trial.suggest_int('max_depth', 3, 15),
-                        'learning_rate': trial.suggest_float('learning_rate', 0.005, 0.3, log=True),
-                        'subsample': trial.suggest_float('subsample', 0.5, 1.0),
-                        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
-                        'gamma': trial.suggest_float('gamma', 0, 5),
-                        'reg_alpha': trial.suggest_float('reg_alpha', 0, 5),
-                        'reg_lambda': trial.suggest_float('reg_lambda', 0, 5),
-                        'min_child_weight': trial.suggest_int('min_child_weight', 1, 10),
-                        'objective': 'reg:squarederror'
-                    }
-
-                    model = XGBRegressor(**params, random_state=42)
-                    model.fit(
-                        X_train_scaled, y_train,
-                        eval_set=[(X_test_scaled, y_test)],
-                        early_stopping_rounds=10,
-                        verbose=False
-                    )
-                    preds = model.predict(X_test_scaled)
-                    rmse = np.sqrt(mean_squared_error(y_test, preds))
-                    return rmse
-
-                # Inisialisasi tuning
-                study = optuna.create_study(
-                    direction='minimize',
-                    sampler=TPESampler(seed=42),
-                    pruner=MedianPruner(n_warmup_steps=10)
-                )
-                study.optimize(objective, n_trials=200)
-
-                # Model terbaik
                 best_model = XGBRegressor(**study.best_params, random_state=42)
-                best_model.fit(
-                    X_train_scaled, y_train,
-                    eval_set=[(X_test_scaled, y_test)],
-                    early_stopping_rounds=10,
-                    verbose=False
-                )
+                best_model.fit(X_train_scaled, y_train)
                 y_pred_best = best_model.predict(X_test_scaled)
 
-                # Evaluasi
                 def evaluate_model(y_true, y_pred):
                     rmse = np.sqrt(mean_squared_error(y_true, y_pred))
                     mape = mean_absolute_percentage_error(y_true, y_pred) * 100
@@ -278,14 +249,12 @@ with tab4:
                 rmse_default, mape_default = evaluate_model(y_test, y_pred_default)
                 rmse_best, mape_best = evaluate_model(y_test, y_pred_best)
 
-                # Output hasil
-                st.success("Model berhasil dituning dengan Optuna!")
+                st.success("Model berhasil dilatih!")
                 st.code(f"""
 === PERBANDINGAN XGBOOST DEFAULT vs TUNED (OPTUNA) ===
 [DEFAULT] RMSE: {rmse_default:.2f}, MAPE: {mape_default:.2f}%
 [TUNED  ] RMSE: {rmse_best:.2f}, MAPE: {mape_best:.2f}%
 """)
-
 
 # Tab 5 - Hasil Prediksi
 with tab5:
