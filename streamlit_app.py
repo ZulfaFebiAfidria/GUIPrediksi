@@ -28,7 +28,6 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 ])
 
 # ======================== TAB 1 ========================
-# ======================== TAB 1 ========================
 with tab1:
     st.header("📂 Dataset")
 
@@ -49,16 +48,31 @@ with tab1:
             if missing_cols:
                 st.error(f"Kolom tidak ditemukan: {', '.join(missing_cols)}")
             else:
-                # Simpan ke session state tanpa ubah apapun
+                # Simpan ke session state tanpa ubah data
                 st.session_state['df'] = df.copy()
 
                 st.success("✅ Dataset valid! Lanjut ke tab preprocessing.")
                 st.dataframe(df.head())
 
-                # Tampilkan deskripsi statistik hanya untuk kolom numerik
-                st.subheader("📊 Deskripsi Statistik (kolom numerik saja)")
-                df_numerik = df.select_dtypes(include=['float64', 'int64'])
-                st.dataframe(df_numerik.describe())
+                # Tampilkan deskripsi statistik seperti di Colab
+                st.subheader("📊 Deskripsi Statistik")
+
+                # Pisahkan kolom date dan kolom numerik
+                df_copy = df.copy()
+                if 'Date' in df_copy.columns:
+                    df_copy['Date'] = pd.to_datetime(df_copy['Date'], errors='coerce')
+
+                # Statistik kolom date
+                date_stats = df_copy['Date'].describe(datetime_is_numeric=True).to_frame().T
+                date_stats.index = ['Date']
+
+                # Statistik kolom numerik
+                num_cols = df_copy.select_dtypes(include=['float64', 'int64']).columns
+                num_stats = df_copy[num_cols].describe().T
+
+                # Gabungkan
+                summary_df = pd.concat([date_stats, num_stats], axis=0)
+                st.dataframe(summary_df)
         except Exception as e:
             st.error(f"Gagal membaca file: {e}")
     else:
@@ -71,9 +85,6 @@ with tab2:
 
     if 'df' in st.session_state:
         df = st.session_state['df'].copy()
-
-        st.subheader("1️⃣ Pembersihan Nama Kolom")
-        df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
 
         df.rename(columns={
             'harga_pakan_ternak_broiler': 'pakan',
