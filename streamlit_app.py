@@ -60,13 +60,18 @@ with tab1:
             st.error(f"Gagal membaca file: {e}")
 
 # ======================== TAB 2 ========================
+# Tab 2 - Preprocessing
 with tab2:
     st.header("⚙ Preprocessing Data")
 
     if 'df' in st.session_state:
         df = st.session_state['df'].copy()
 
+        st.subheader("1️⃣ Pembersihan Nama Kolom")
         df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
+        st.write("Nama kolom setelah dibersihkan:")
+        st.write(df.columns.tolist())
+
         df.rename(columns={
             'harga_pakan_ternak_broiler': 'pakan',
             'harga_doc_broiler': 'doc',
@@ -75,18 +80,59 @@ with tab2:
             'date': 'tanggal'
         }, inplace=True)
 
+        st.subheader("2️⃣ Missing Values")
+
         kolom_target = ['pakan', 'doc', 'jagung', 'daging']
+        missing_before = df[kolom_target].isna().sum()
+
         df[kolom_target] = df[kolom_target].interpolate(method='linear')
         for col in kolom_target:
             df[col].fillna(method='ffill', inplace=True)
             df[col].fillna(method='bfill', inplace=True)
 
+        missing_after = df[kolom_target].isna().sum()
+
+        missing_df = pd.DataFrame({
+            "Sebelum": missing_before,
+            "Sesudah": missing_after
+        })
+
+        st.write("Jumlah missing value sebelum dan sesudah penanganan:")
+        st.dataframe(missing_df)
+
+        st.subheader("3️⃣ Deteksi Outlier (IQR)")
+        Q1 = df[kolom_target].quantile(0.25)
+        Q3 = df[kolom_target].quantile(0.75)
+        IQR = Q3 - Q1
+        outliers = (df[kolom_target] < (Q1 - 1.5 * IQR)) | (df[kolom_target] > (Q3 + 1.5 * IQR))
+        st.write("Jumlah outlier per kolom:")
+        st.dataframe(outliers.sum())
+
+        fig_outlier, ax = plt.subplots(figsize=(10, 5))
+        sns.boxplot(data=df[kolom_target], orient='h', palette='Set2', ax=ax)
+        ax.set_title("Boxplot Deteksi Outlier")
+        st.pyplot(fig_outlier)
+
+        st.subheader("4️⃣ Transformasi Log")
         for col in kolom_target:
             df[f"{col}_log"] = np.log(df[col])
 
+        log_cols = [f"{col}_log" for col in kolom_target]
+        st.write("Contoh kolom hasil log transform:")
+        st.dataframe(df[log_cols].head())
+
+        fig_log, axs = plt.subplots(2, 2, figsize=(12, 8))
+        axs = axs.flatten()
+        for i, col in enumerate(log_cols):
+            sns.histplot(df[col], kde=True, color='skyblue', ax=axs[i])
+            axs[i].set_title(f'Distribusi Log: {col}')
+        plt.tight_layout()
+        st.pyplot(fig_log)
+
         st.session_state['df_clean'] = df
+
     else:
-        st.warning("Upload dataset terlebih dahulu.")
+        st.warning("Silakan upload dataset di tab 📂 Dataset.")
 
 # ======================== TAB 3 ========================
 with tab3:
