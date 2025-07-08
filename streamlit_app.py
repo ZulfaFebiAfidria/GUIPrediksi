@@ -68,6 +68,13 @@ with tab2:
     if 'df' in st.session_state:
         df = st.session_state['df'].copy()
 
+        # 🔧 Bersihkan baris kosong terlebih dahulu
+        df.dropna(how='all', inplace=True)
+        if 'Date' in df.columns:
+            df = df[df['Date'].notna()]  # Pastikan hanya baris yang punya tanggal
+        elif 'tanggal' in df.columns:
+            df = df[df['tanggal'].notna()]
+
         st.subheader("1️⃣ Pembersihan Nama Kolom")
         df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
         st.write("Nama kolom setelah dibersihkan:", df.columns.tolist())
@@ -124,6 +131,7 @@ with tab2:
         st.success("✅ Preprocessing selesai. Lanjut ke tab visualisasi atau model.")
     else:
         st.warning("⚠ Silakan upload dataset terlebih dahulu di tab 📂 Dataset.")
+
 
 # TAB 3 - Visualisasi
 with tab3:
