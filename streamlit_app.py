@@ -42,30 +42,23 @@ with tab1:
         try:
             df = pd.read_excel(uploaded_file)
 
-            # Hanya cek apakah semua kolom yang diperlukan tersedia
             missing_cols = [col for col in required_columns if col not in df.columns]
-
             if missing_cols:
                 st.error(f"❌ Kolom tidak ditemukan: {', '.join(missing_cols)}")
             else:
-                # Simpan dataframe apa adanya
                 st.session_state['df'] = df
-
-                st.success("✅ Dataset berhasil dimuat! Lanjut ke tab preprocessing.")
-                st.write("📄 Preview Data:")
+                st.success("✅ Dataset berhasil dimuat! Silakan lanjut ke tab preprocessing.")
+                st.write("Preview Data:")
                 st.dataframe(df.head())
 
-                with st.expander("📊 Deskripsi Statistik"):
-                    st.dataframe(df.describe())
-
-                with st.expander("📉 Jumlah Missing Value per Kolom"):
-                    st.dataframe(df[required_columns].isna().sum())
-
+                with st.expander("📊 Deskripsi Statistik (kolom numerik saja)"):
+                    st.dataframe(df.describe(include='all'))  # bisa pakai 'all' jika ingin semuanya
         except Exception as e:
             st.error(f"❌ Gagal membaca file: {e}")
     else:
         if 'df' not in st.session_state:
-            st.info("ℹ Silakan upload dataset terlebih dahulu.")
+            st.info("Silakan upload dataset terlebih dahulu.")
+
 
 # ======================== TAB 2 ========================
 with tab2:
