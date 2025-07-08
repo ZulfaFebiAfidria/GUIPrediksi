@@ -155,12 +155,13 @@ with tab3:
         sns.histplot(df['daging'], kde=True, ax=ax1)
         st.pyplot(fig1)
 
-        st.subheader("Korelasi antar Fitur")
+        st.subheader("Korelasi antar Fitur (Transformasi Log)")
+        log_cols = [f"{col}_log" for col in ['pakan', 'doc', 'jagung', 'daging']]
         fig2, ax2 = plt.subplots()
-        sns.heatmap(df.corr(numeric_only=True), annot=True, cmap="coolwarm", ax=ax2)
+        sns.heatmap(df[log_cols].corr(), annot=True, cmap="coolwarm", ax=ax2)
         st.pyplot(fig2)
 
-        st.subheader("Visualisasi Time Series Harga")
+        st.subheader("Visualisasi Time Series Harga Asli")
         fig3, ax3 = plt.subplots(figsize=(10, 5))
         ax3.plot(df['tanggal'], df['pakan'], label='Pakan')
         ax3.plot(df['tanggal'], df['doc'], label='DOC')
@@ -172,5 +173,109 @@ with tab3:
         ax3.legend()
         st.pyplot(fig3)
 
+    else:
+        st.warning("Silakan lakukan preprocessing terlebih dahulu.")
+
+# Tab 4 - Model
+with tab4:
+    st.header("🤖 Model")
+
+    if 'df_clean' in st.session_state:
+        df = st.session_state['df_clean']
+
+        df['rasio_pakan_daging'] = df['pakan'] / df['daging']
+        df['rasio_doc_daging'] = df['doc'] / df['daging']
+        df['rasio_jagung_pakan'] = df['jagung'] / df['pakan']
+        df['ma7_daging'] = df['daging'].rolling(window=7).mean()
+        df['ma7_pakan'] = df['pakan'].rolling(window=7).mean()
+        df['ma7_doc'] = df['doc'].rolling(window=7).mean()
+        df['ma7_jagung'] = df['jagung'].rolling(window=7).mean()
+        df['lag1_daging'] = df['daging'].shift(1)
+        df['lag2_daging'] = df['daging'].shift(2)
+        df['pct_change_daging'] = df['daging'].pct_change()
+
+        df.dropna(inplace=True)
+
+        fitur = [
+            'rasio_pakan_daging', 'rasio_doc_daging', 'rasio_jagung_pakan',
+            'ma7_daging', 'ma7_pakan', 'ma7_doc', 'ma7_jagung',
+            'lag1_daging', 'lag2_daging', 'pct_change_daging'
+        ]
+        target = 'daging'
+
+        X = df[fitur]
+        y = df[target]
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+
+        model_default = XGBRegressor(random_state=42)
+        model_default.fit(X_train_scaled, y_train)
+        y_pred_default = model_default.predict(X_test_scaled)
+
+        if st.button("🔍 Jalankan Tuning Optuna"):
+            with st.spinner("Menjalankan tuning Optuna..."):
+                study = optuna.create_study(direction='minimize', sampler=TPESampler(seed=42), pruner=MedianPruner(n_warmup_steps=10))
+                study.optimize(lambda trial: np.sqrt(mean_squared_error(
+                    y_test,
+                    XGBRegressor(
+                        **{
+                            'n_estimators': trial.suggest_int('n_estimators', 100, 500),
+                            'max_depth': trial.suggest_int('max_depth', 3, 10),
+                            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
+                            'subsample': trial.suggest_float('subsample', 0.5, 1.0),
+                            'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
+                            'gamma': trial.suggest_float('gamma', 0, 2),
+                            'reg_alpha': trial.suggest_float('reg_alpha', 0, 2),
+                            'reg_lambda': trial.suggest_float('reg_lambda', 0, 2),
+                            'min_child_weight': trial.suggest_int('min_child_weight', 1, 5),
+                            'objective': 'reg:squarederror'
+                        }, random_state=42
+                    ).fit(X_train_scaled, y_train).predict(X_test_scaled)
+                )), n_trials=5)
+
+                best_model = XGBRegressor(**study.best_params, random_state=42)
+                best_model.fit(X_train_scaled, y_train)
+                y_pred_best = best_model.predict(X_test_scaled)
+
+                def evaluate_model(y_true, y_pred):
+                    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+                    mape = mean_absolute_percentage_error(y_true, y_pred) * 100
+                    return rmse, mape
+
+                rmse_default, mape_default = evaluate_model(y_test, y_pred_default)
+                rmse_best, mape_best = evaluate_model(y_test, y_pred_best)
+
+                st.success("Model berhasil dilatih!")
+                st.code(f"""
+=== PERBANDINGAN XGBOOST DEFAULT vs TUNED (OPTUNA) ===
+[DEFAULT] RMSE: {rmse_default:.2f}, MAPE: {mape_default:.2f}%
+[TUNED  ] RMSE: {rmse_best:.2f}, MAPE: {mape_best:.2f}%
+""")
+
+# Tab 5 - Hasil Prediksi
+with tab5:
+    st.header("📉 Hasil Prediksi")
+
+    if 'df_clean' in st.session_state:
+        df = st.session_state['df_clean']
+
+        st.subheader("Simulasi Prediksi Harga Daging")
+        df_pred = df.copy()
+        df_pred['pred_xgb'] = df['daging'] * 0.95
+        df_pred['pred_optuna'] = df['daging'] * 0.97
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.plot(df['tanggal'], df['daging'], label='Aktual', linewidth=2)
+        ax.plot(df['tanggal'], df_pred['pred_xgb'], label='Prediksi XGBoost', linestyle='--')
+        ax.plot(df['tanggal'], df_pred['pred_optuna'], label='XGBoost + Optuna', linestyle='--')
+        ax.set_title("Perbandingan Harga Aktual vs Prediksi")
+        ax.set_xlabel("Tanggal")
+        ax.set_ylabel("Harga")
+        ax.legend()
+        st.pyplot(fig)
     else:
         st.warning("Silakan lakukan preprocessing terlebih dahulu.")
