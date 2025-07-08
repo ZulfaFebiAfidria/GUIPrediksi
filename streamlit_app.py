@@ -33,33 +33,39 @@ with tab1:
 
     required_columns = [
         'Date', 'Harga Pakan Ternak Broiler', 'Harga DOC Broiler',
-        'Harga Jagung TK Peternak', 'Harga Daging Ayam Broiler']
+        'Harga Jagung TK Peternak', 'Harga Daging Ayam Broiler'
+    ]
 
     uploaded_file = st.file_uploader("Upload Dataset Excel (.xlsx)", type=["xlsx"])
 
     if uploaded_file:
         try:
             df = pd.read_excel(uploaded_file)
+
+            # Hanya cek apakah semua kolom yang diperlukan tersedia
             missing_cols = [col for col in required_columns if col not in df.columns]
 
             if missing_cols:
-                st.error(f"Kolom tidak ditemukan: {', '.join(missing_cols)}")
+                st.error(f"❌ Kolom tidak ditemukan: {', '.join(missing_cols)}")
             else:
-                for col in df.columns:
-                    if col != 'Date':
-                        df[col] = pd.to_numeric(df[col], errors='coerce')
-
+                # Simpan dataframe apa adanya
                 st.session_state['df'] = df
-                st.success("✅ Dataset valid! Lanjut ke tab preprocessing.")
+
+                st.success("✅ Dataset berhasil dimuat! Lanjut ke tab preprocessing.")
+                st.write("📄 Preview Data:")
                 st.dataframe(df.head())
 
                 with st.expander("📊 Deskripsi Statistik"):
                     st.dataframe(df.describe())
+
+                with st.expander("📉 Jumlah Missing Value per Kolom"):
+                    st.dataframe(df[required_columns].isna().sum())
+
         except Exception as e:
-            st.error(f"Gagal membaca file: {e}")
+            st.error(f"❌ Gagal membaca file: {e}")
     else:
         if 'df' not in st.session_state:
-            st.info("Silakan upload dataset terlebih dahulu.")
+            st.info("ℹ Silakan upload dataset terlebih dahulu.")
 
 # ======================== TAB 2 ========================
 with tab2:
