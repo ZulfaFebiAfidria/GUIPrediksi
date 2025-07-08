@@ -122,7 +122,7 @@ with tab4:
     if 'df_clean' in st.session_state:
         df = st.session_state['df_clean']
 
-        # Fitur
+        # Buat fitur
         df['rasio_pakan_daging'] = df['pakan'] / df['daging']
         df['rasio_doc_daging'] = df['doc'] / df['daging']
         df['rasio_jagung_pakan'] = df['jagung'] / df['pakan']
@@ -149,18 +149,16 @@ with tab4:
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
 
-        # Default Model
+        # Model default
         model_default = XGBRegressor(random_state=42)
         model_default.fit(X_train_scaled, y_train)
         y_pred_default = model_default.predict(X_test_scaled)
-
-        # Simpan hasil default
         rmse_default = np.sqrt(mean_squared_error(y_test, y_pred_default))
         mape_default = mean_absolute_percentage_error(y_test, y_pred_default) * 100
 
-        # Jalankan tuning optuna
-        if st.button("🔍 Jalankan Tuning Optuna"):
-            with st.spinner("Menjalankan tuning Optuna..."):
+        # Jika tuning belum pernah dijalankan
+        if 'optuna_ran' not in st.session_state:
+            with st.spinner("⚙ Menjalankan tuning Optuna..."):
 
                 def objective(trial):
                     params = {
@@ -187,25 +185,19 @@ with tab4:
                 best_model.fit(X_train_scaled, y_train)
                 y_pred_best = best_model.predict(X_test_scaled)
 
-                rmse_best = np.sqrt(mean_squared_error(y_test, y_pred_best))
-                mape_best = mean_absolute_percentage_error(y_test, y_pred_best) * 100
-
                 st.session_state['optuna_ran'] = True
-                st.session_state['rmse_best'] = rmse_best
-                st.session_state['mape_best'] = mape_best
+                st.session_state['rmse_best'] = np.sqrt(mean_squared_error(y_test, y_pred_best))
+                st.session_state['mape_best'] = mean_absolute_percentage_error(y_test, y_pred_best) * 100
 
-        # Tampilkan hasil perbandingan
-        if st.session_state.get('optuna_ran'):
-            st.code(f"""
+        # Tampilkan perbandingan hasil
+        st.code(f"""
 === PERBANDINGAN XGBOOST DEFAULT vs TUNED (OPTUNA) ===
 [DEFAULT] RMSE: {rmse_default:.2f}, MAPE: {mape_default:.2f}%
 [TUNED  ] RMSE: {st.session_state['rmse_best']:.2f}, MAPE: {st.session_state['mape_best']:.2f}%
 """)
-        else:
-            st.code(f"""
-[DEFAULT] RMSE: {rmse_default:.2f}, MAPE: {mape_default:.2f}%
-🔧 Tekan tombol di atas untuk tuning dengan Optuna.
-""")
+    else:
+        st.warning("Silakan lakukan preprocessing terlebih dahulu.")
+
 
 # ======================== TAB 5 ========================
 with tab5:
