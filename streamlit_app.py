@@ -28,6 +28,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 ])
 
 # ======================== TAB 1 ========================
+# ======================== TAB 1 ========================
 with tab1:
     st.header("📂 Dataset")
 
@@ -40,25 +41,29 @@ with tab1:
 
     if uploaded_file:
         try:
+            # Baca data
             df = pd.read_excel(uploaded_file)
 
+            # Cek apakah semua kolom penting tersedia
             missing_cols = [col for col in required_columns if col not in df.columns]
             if missing_cols:
-                st.error(f"❌ Kolom tidak ditemukan: {', '.join(missing_cols)}")
+                st.error(f"Kolom tidak ditemukan: {', '.join(missing_cols)}")
             else:
-                st.session_state['df'] = df
-                st.success("✅ Dataset berhasil dimuat! Silakan lanjut ke tab preprocessing.")
-                st.write("Preview Data:")
+                # Simpan ke session state tanpa ubah apapun
+                st.session_state['df'] = df.copy()
+
+                st.success("✅ Dataset valid! Lanjut ke tab preprocessing.")
                 st.dataframe(df.head())
 
-                with st.expander("📊 Deskripsi Statistik (kolom numerik saja)"):
-                    st.dataframe(df.describe(include='all'))  # bisa pakai 'all' jika ingin semuanya
+                # Tampilkan deskripsi statistik hanya untuk kolom numerik
+                st.subheader("📊 Deskripsi Statistik (kolom numerik saja)")
+                df_numerik = df.select_dtypes(include=['float64', 'int64'])
+                st.dataframe(df_numerik.describe())
         except Exception as e:
-            st.error(f"❌ Gagal membaca file: {e}")
+            st.error(f"Gagal membaca file: {e}")
     else:
         if 'df' not in st.session_state:
             st.info("Silakan upload dataset terlebih dahulu.")
-
 
 # ======================== TAB 2 ========================
 with tab2:
@@ -67,16 +72,8 @@ with tab2:
     if 'df' in st.session_state:
         df = st.session_state['df'].copy()
 
-        # 🔧 Bersihkan baris kosong terlebih dahulu
-        df.dropna(how='all', inplace=True)
-        if 'Date' in df.columns:
-            df = df[df['Date'].notna()]  # Pastikan hanya baris yang punya tanggal
-        elif 'tanggal' in df.columns:
-            df = df[df['tanggal'].notna()]
-
         st.subheader("1️⃣ Pembersihan Nama Kolom")
         df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
-        st.write("Nama kolom setelah dibersihkan:", df.columns.tolist())
 
         df.rename(columns={
             'harga_pakan_ternak_broiler': 'pakan',
@@ -87,6 +84,11 @@ with tab2:
         }, inplace=True)
 
         kolom_target = ['pakan', 'doc', 'jagung', 'daging']
+
+        # === FIX KONVERSI NUMERIK ===
+        for col in kolom_target:
+            df[col] = df[col].astype(str).str.replace(",", "").str.strip()
+            df[col] = pd.to_numeric(df[col], errors='coerce')
 
         st.subheader("2️⃣ Penanganan Missing Value")
         missing_before = df[kolom_target].isna().sum()
@@ -126,10 +128,11 @@ with tab2:
         st.pyplot(fig_log)
 
         st.session_state['df_clean'] = df
-
         st.success("✅ Preprocessing selesai. Lanjut ke tab visualisasi atau model.")
+
     else:
         st.warning("⚠ Silakan upload dataset terlebih dahulu di tab 📂 Dataset.")
+
 
 
 # TAB 3 - Visualisasi
