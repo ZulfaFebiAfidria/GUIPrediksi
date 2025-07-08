@@ -27,6 +27,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📉 Hasil Prediksi"
 ])
 
+# ======================== TAB 1 ========================
 with tab1:
     st.header("📂 Dataset")
 
@@ -58,6 +59,7 @@ with tab1:
         except Exception as e:
             st.error(f"Gagal membaca file: {e}")
 
+# ======================== TAB 2 ========================
 with tab2:
     st.header("⚙ Preprocessing Data")
 
@@ -86,6 +88,7 @@ with tab2:
     else:
         st.warning("Upload dataset terlebih dahulu.")
 
+# ======================== TAB 3 ========================
 with tab3:
     st.header("📈 Visualisasi Dataset")
 
@@ -112,13 +115,14 @@ with tab3:
     else:
         st.warning("Lakukan preprocessing terlebih dahulu.")
 
+# ======================== TAB 4 ========================
 with tab4:
     st.header("🤖 Model")
 
     if 'df_clean' in st.session_state:
-        df = st.session_state['df_clean'].copy()
+        df = st.session_state['df_clean']
 
-        # Fitur Teknikal
+        # Fitur
         df['rasio_pakan_daging'] = df['pakan'] / df['daging']
         df['rasio_doc_daging'] = df['doc'] / df['daging']
         df['rasio_jagung_pakan'] = df['jagung'] / df['pakan']
@@ -129,14 +133,12 @@ with tab4:
         df['lag1_daging'] = df['daging'].shift(1)
         df['lag2_daging'] = df['daging'].shift(2)
         df['pct_change_daging'] = df['daging'].pct_change()
-
         df.dropna(inplace=True)
 
         fitur = [
             'rasio_pakan_daging', 'rasio_doc_daging', 'rasio_jagung_pakan',
             'ma7_daging', 'ma7_pakan', 'ma7_doc', 'ma7_jagung',
-            'lag1_daging', 'lag2_daging', 'pct_change_daging'
-        ]
+            'lag1_daging', 'lag2_daging', 'pct_change_daging']
         target = 'daging'
 
         X = df[fitur]
@@ -147,35 +149,30 @@ with tab4:
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
 
-        # Model Default (langsung jalan dan tampilkan)
+        # Default Model
         model_default = XGBRegressor(random_state=42)
         model_default.fit(X_train_scaled, y_train)
         y_pred_default = model_default.predict(X_test_scaled)
 
+        # Simpan hasil default
         rmse_default = np.sqrt(mean_squared_error(y_test, y_pred_default))
         mape_default = mean_absolute_percentage_error(y_test, y_pred_default) * 100
 
-        st.subheader("📌 Hasil Model Default (XGBoost)")
-        st.markdown(f"""
-        **RMSE**: `{rmse_default:.2f}`  
-        **MAPE**: `{mape_default:.2f}%`
-        """)
-
-        # Tombol tuning
+        # Jalankan tuning optuna
         if st.button("🔍 Jalankan Tuning Optuna"):
-            with st.spinner("Menjalankan tuning Optuna... (3 trial)"):
+            with st.spinner("Menjalankan tuning Optuna..."):
 
                 def objective(trial):
                     params = {
-                        'n_estimators': trial.suggest_int('n_estimators', 100, 200),
-                        'max_depth': trial.suggest_int('max_depth', 3, 6),
+                        'n_estimators': trial.suggest_int('n_estimators', 100, 300),
+                        'max_depth': trial.suggest_int('max_depth', 3, 8),
                         'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
-                        'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+                        'subsample': trial.suggest_float('subsample', 0.5, 1.0),
                         'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
-                        'gamma': trial.suggest_float('gamma', 0, 1),
-                        'reg_alpha': trial.suggest_float('reg_alpha', 0, 1),
-                        'reg_lambda': trial.suggest_float('reg_lambda', 0, 1),
-                        'min_child_weight': trial.suggest_int('min_child_weight', 1, 3),
+                        'gamma': trial.suggest_float('gamma', 0, 2),
+                        'reg_alpha': trial.suggest_float('reg_alpha', 0, 2),
+                        'reg_lambda': trial.suggest_float('reg_lambda', 0, 2),
+                        'min_child_weight': trial.suggest_int('min_child_weight', 1, 5),
                         'objective': 'reg:squarederror'
                     }
                     model = XGBRegressor(**params, random_state=42)
@@ -184,7 +181,7 @@ with tab4:
                     return np.sqrt(mean_squared_error(y_test, preds))
 
                 study = optuna.create_study(direction='minimize', sampler=TPESampler(seed=42), pruner=MedianPruner(n_warmup_steps=5))
-                study.optimize(objective, n_trials=3)
+                study.optimize(objective, n_trials=10)
 
                 best_model = XGBRegressor(**study.best_params, random_state=42)
                 best_model.fit(X_train_scaled, y_train)
@@ -193,17 +190,24 @@ with tab4:
                 rmse_best = np.sqrt(mean_squared_error(y_test, y_pred_best))
                 mape_best = mean_absolute_percentage_error(y_test, y_pred_best) * 100
 
-                st.success("🎉 Tuning selesai!")
+                st.session_state['optuna_ran'] = True
+                st.session_state['rmse_best'] = rmse_best
+                st.session_state['mape_best'] = mape_best
 
-                st.code(f"""
+        # Tampilkan hasil perbandingan
+        if st.session_state.get('optuna_ran'):
+            st.code(f"""
 === PERBANDINGAN XGBOOST DEFAULT vs TUNED (OPTUNA) ===
 [DEFAULT] RMSE: {rmse_default:.2f}, MAPE: {mape_default:.2f}%
-[TUNED  ] RMSE: {rmse_best:.2f}, MAPE: {mape_best:.2f}%
+[TUNED  ] RMSE: {st.session_state['rmse_best']:.2f}, MAPE: {st.session_state['mape_best']:.2f}%
+""")
+        else:
+            st.code(f"""
+[DEFAULT] RMSE: {rmse_default:.2f}, MAPE: {mape_default:.2f}%
+🔧 Tekan tombol di atas untuk tuning dengan Optuna.
 """)
 
-    else:
-        st.warning("Silakan lakukan preprocessing terlebih dahulu.")
-
+# ======================== TAB 5 ========================
 with tab5:
     st.header("📉 Hasil Prediksi")
 
