@@ -156,47 +156,47 @@ with tab4:
         rmse_default = np.sqrt(mean_squared_error(y_test, y_pred_default))
         mape_default = mean_absolute_percentage_error(y_test, y_pred_default) * 100
 
-        # Jika tuning belum pernah dijalankan
-        if 'optuna_ran' not in st.session_state:
-            with st.spinner("⚙ Menjalankan tuning Optuna..."):
+        # Jalankan tuning Optuna otomatis
+        with st.spinner("⚙ Menjalankan tuning Optuna..."):
 
-                def objective(trial):
-                    params = {
-                        'n_estimators': trial.suggest_int('n_estimators', 100, 300),
-                        'max_depth': trial.suggest_int('max_depth', 3, 8),
-                        'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
-                        'subsample': trial.suggest_float('subsample', 0.5, 1.0),
-                        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
-                        'gamma': trial.suggest_float('gamma', 0, 2),
-                        'reg_alpha': trial.suggest_float('reg_alpha', 0, 2),
-                        'reg_lambda': trial.suggest_float('reg_lambda', 0, 2),
-                        'min_child_weight': trial.suggest_int('min_child_weight', 1, 5),
-                        'objective': 'reg:squarederror'
-                    }
-                    model = XGBRegressor(**params, random_state=42)
-                    model.fit(X_train_scaled, y_train)
-                    preds = model.predict(X_test_scaled)
-                    return np.sqrt(mean_squared_error(y_test, preds))
+            def objective(trial):
+                params = {
+                    'n_estimators': trial.suggest_int('n_estimators', 100, 300),
+                    'max_depth': trial.suggest_int('max_depth', 3, 8),
+                    'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
+                    'subsample': trial.suggest_float('subsample', 0.5, 1.0),
+                    'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
+                    'gamma': trial.suggest_float('gamma', 0, 2),
+                    'reg_alpha': trial.suggest_float('reg_alpha', 0, 2),
+                    'reg_lambda': trial.suggest_float('reg_lambda', 0, 2),
+                    'min_child_weight': trial.suggest_int('min_child_weight', 1, 5),
+                    'objective': 'reg:squarederror'
+                }
+                model = XGBRegressor(**params, random_state=42)
+                model.fit(X_train_scaled, y_train)
+                preds = model.predict(X_test_scaled)
+                return np.sqrt(mean_squared_error(y_test, preds))
 
-                study = optuna.create_study(direction='minimize', sampler=TPESampler(seed=42), pruner=MedianPruner(n_warmup_steps=5))
-                study.optimize(objective, n_trials=10)
+            study = optuna.create_study(direction='minimize', sampler=TPESampler(seed=42), pruner=MedianPruner(n_warmup_steps=5))
+            study.optimize(objective, n_trials=10)
 
-                best_model = XGBRegressor(**study.best_params, random_state=42)
-                best_model.fit(X_train_scaled, y_train)
-                y_pred_best = best_model.predict(X_test_scaled)
+            best_model = XGBRegressor(**study.best_params, random_state=42)
+            best_model.fit(X_train_scaled, y_train)
+            y_pred_best = best_model.predict(X_test_scaled)
 
-                st.session_state['optuna_ran'] = True
-                st.session_state['rmse_best'] = np.sqrt(mean_squared_error(y_test, y_pred_best))
-                st.session_state['mape_best'] = mean_absolute_percentage_error(y_test, y_pred_best) * 100
+            rmse_best = np.sqrt(mean_squared_error(y_test, y_pred_best))
+            mape_best = mean_absolute_percentage_error(y_test, y_pred_best) * 100
 
         # Tampilkan perbandingan hasil
+        st.success("✅ Model selesai ditraining dan dituning.")
         st.code(f"""
 === PERBANDINGAN XGBOOST DEFAULT vs TUNED (OPTUNA) ===
 [DEFAULT] RMSE: {rmse_default:.2f}, MAPE: {mape_default:.2f}%
-[TUNED  ] RMSE: {st.session_state['rmse_best']:.2f}, MAPE: {st.session_state['mape_best']:.2f}%
+[TUNED  ] RMSE: {rmse_best:.2f}, MAPE: {mape_best:.2f}%
 """)
     else:
         st.warning("Silakan lakukan preprocessing terlebih dahulu.")
+
 
 
 # ======================== TAB 5 ========================
