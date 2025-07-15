@@ -354,7 +354,7 @@ elif menu == "🤖 Model":
 
 
 # 6. HASIL PREDIKSI
-el# ================ MENU: HASIL PREDIKSI ================ 
+# ================ MENU: HASIL PREDIKSI ================ 
 elif menu == "📉 Hasil Prediksi":
     st.header("📉 Hasil Prediksi")
 
