@@ -365,7 +365,7 @@ elif menu == "🤖 Model":
 
 
    
-# ================ MENU: HASIL PREDIKSI ================
+# ================ MENU: HASIL PREDIKSI ================ 
 elif menu == "📉 Hasil Prediksi":
     st.header("📉 Hasil Prediksi")
 
@@ -382,13 +382,15 @@ elif menu == "📉 Hasil Prediksi":
         # ====================
         y_pred_default = model_default.predict(X_test)
         y_pred_best = model_optuna.predict(X_test)
-    
+
         # ================================
         # Prediksi 14 Hari ke Depan
         # ================================
         st.subheader("📅 Prediksi 14 Hari ke Depan")
 
-        last_known_input = X_train.iloc[-1:].copy()
+        # ✅ Perbaikan error: ubah numpy ke DataFrame
+        last_known_input = pd.DataFrame([X_train[-1]], columns=[f"f{i}" for i in range(X_train.shape[1])])
+
         future_preds_default = []
         future_preds_optuna = []
         future_dates = []
@@ -429,6 +431,27 @@ elif menu == "📉 Hasil Prediksi":
         ax2.legend()
         ax2.tick_params(axis='x', rotation=45)
         st.pyplot(fig2)
+
+        # ========================================
+        # Tambahan Visualisasi: Prediksi vs Aktual
+        # ========================================
+        st.subheader("📊 Grafik Aktual vs Prediksi (Data Uji)")
+
+        hasil_df = pd.DataFrame({
+            'Tanggal': df.iloc[y_test.index]['tanggal'].values,
+            'Aktual': y_test,
+            'Prediksi XGBoost': y_pred_default,
+            'Prediksi XGBoost + Optuna': y_pred_best
+        })
+
+        fig3, ax3 = plt.subplots(figsize=(12, 5))
+        ax3.plot(hasil_df['Tanggal'], hasil_df['Aktual'], label='Aktual', linewidth=2)
+        ax3.plot(hasil_df['Tanggal'], hasil_df['Prediksi XGBoost'], label='Prediksi XGBoost', linestyle='--')
+        ax3.plot(hasil_df['Tanggal'], hasil_df['Prediksi XGBoost + Optuna'], label='Prediksi Tuned', linestyle='--')
+        ax3.set_title("Perbandingan Harga Aktual vs Prediksi (Data Uji)")
+        ax3.legend()
+        ax3.tick_params(axis='x', rotation=45)
+        st.pyplot(fig3)
 
     else:
         st.warning("Model dan data belum tersedia. Harap lakukan preprocessing dan pelatihan model terlebih dahulu.")
