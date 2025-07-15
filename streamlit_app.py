@@ -231,59 +231,124 @@ elif menu == "📈 Visualisasi":
     else:
         st.warning("Lakukan preprocessing terlebih dahulu.")
         
-# 5. MODEL
+# ================ MENU: MODEL =========================
 elif menu == "🤖 Model":
     st.header("🤖 Model")
+
     if 'df_clean' in st.session_state:
         df = st.session_state['df_clean'].copy()
 
-        # buat fitur
+        # Buat fitur baru
         df['rasio_pakan_daging'] = df['pakan'] / df['daging']
         df['rasio_doc_daging'] = df['doc'] / df['daging']
         df['rasio_jagung_pakan'] = df['jagung'] / df['pakan']
-        df['ma7_daging'] = df['daging'].rolling(7).mean()
-        df['ma7_pakan'] = df['pakan'].rolling(7).mean()
-        df['ma7_doc'] = df['doc'].rolling(7).mean()
-        df['ma7_jagung'] = df['jagung'].rolling(7).mean()
+        df['ma7_daging'] = df['daging'].rolling(window=7).mean()
+        df['ma7_pakan'] = df['pakan'].rolling(window=7).mean()
+        df['ma7_doc'] = df['doc'].rolling(window=7).mean()
+        df['ma7_jagung'] = df['jagung'].rolling(window=7).mean()
         df['lag1_daging'] = df['daging'].shift(1)
         df['lag2_daging'] = df['daging'].shift(2)
         df['pct_change_daging'] = df['daging'].pct_change()
+
         df.dropna(inplace=True)
 
-        fitur = ['rasio_pakan_daging','rasio_doc_daging','rasio_jagung_pakan',
-                 'ma7_daging','ma7_pakan','ma7_doc','ma7_jagung',
-                 'lag1_daging','lag2_daging','pct_change_daging']
-        X = df[fitur]; y = df['daging']
+        fitur = [
+            'rasio_pakan_daging', 'rasio_doc_daging', 'rasio_jagung_pakan',
+            'ma7_daging', 'ma7_pakan', 'ma7_doc', 'ma7_jagung',
+            'lag1_daging', 'lag2_daging', 'pct_change_daging'
+        ]
+        target = 'daging'
+
+        X = df[fitur]
+        y = df[target]
+
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
 
-        model_default = XGBRegressor(n_estimators=100, learning_rate=0.1, max_depth=3,
-                                     subsample=1, colsample_bytree=1,
-                                     objective='reg:squarederror', random_state=42)
+        def evaluate_model(y_true, y_pred):
+            rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+            mape = mean_absolute_percentage_error(y_true, y_pred) * 100
+            return rmse, mape
+
+        # ======================== MODEL DEFAULT ========================
+        model_default = XGBRegressor(
+            n_estimators=100,
+            learning_rate=0.1,
+            max_depth=3,
+            subsample=1,
+            colsample_bytree=1,
+            objective='reg:squarederror',
+            random_state=42
+        )
         model_default.fit(X_train_scaled, y_train)
+        y_pred_default = model_default.predict(X_test_scaled)
+        rmse_default, mape_default = evaluate_model(y_test, y_pred_default)
 
-        best_params = {'n_estimators':200,'max_depth':4,'learning_rate':0.05,
-                       'subsample':0.8,'colsample_bytree':0.8,
-                       'gamma':0,'reg_alpha':0.5,'reg_lambda':1,'min_child_weight':1,
-                       'objective':'reg:squarederror'}
-        model_opt = XGBRegressor(**best_params, random_state=42)
-        model_opt.fit(X_train_scaled, y_train)
+        # ======================== MODEL OPTUNA FIXED ========================
+        fixed_params = {
+            'n_estimators': 200,
+            'max_depth': 4,
+            'learning_rate': 0.05,
+            'subsample': 0.8,
+            'colsample_bytree': 0.8,
+            'gamma': 0,
+            'reg_alpha': 0.5,
+            'reg_lambda': 1,
+            'min_child_weight': 1,
+            'objective': 'reg:squarederror'
+        }
 
-        # simpan ke session
+        model_optuna = XGBRegressor(**fixed_params, random_state=42)
+        model_optuna.fit(X_train_scaled, y_train)
+        y_pred_optuna = model_optuna.predict(X_test_scaled)
+        rmse_optuna, mape_optuna = evaluate_model(y_test, y_pred_optuna)
+
+        # Simpan ke session
         st.session_state.update({
             'model_default': model_default,
-            'model_optuna': model_opt,
+            'model_optuna': model_optuna,
             'X_test': X_test_scaled,
             'y_test': y_test,
             'X_train': X_train_scaled,
-            'df_features': df,
+            'df_features': df
         })
+
+        # ======================== TAMPILKAN METRIK ========================
         st.success("✅ Model selesai ditraining.")
+        st.markdown("### 📈 Perbandingan Performa Model")
+        st.markdown(f"""
+        | Model                     | RMSE     | MAPE    |
+        |---------------------------|----------|---------|
+        | **XGBoost Default**       | {rmse_default:.2f} | {mape_default:.2f}% |
+        | **XGBoost + Optuna**      | {rmse_optuna:.2f} | {mape_optuna:.2f}% |
+        """)
+
+        # ======================== VISUALISASI ========================
+        st.subheader("📉 Grafik Prediksi vs Aktual")
+
+        tanggal_test = df.loc[y_test.index, 'tanggal'].values if 'tanggal' in df.columns else range(len(y_test))
+        hasil_df = pd.DataFrame({
+            'Tanggal': pd.to_datetime(tanggal_test),
+            'Aktual': y_test.values,
+            'Prediksi Default': y_pred_default,
+            'Prediksi Tuned': y_pred_optuna
+        })
+
+        fig1, ax1 = plt.subplots(figsize=(12, 5))
+        ax1.plot(hasil_df['Tanggal'], hasil_df['Aktual'], label='Aktual', linewidth=2)
+        ax1.plot(hasil_df['Tanggal'], hasil_df['Prediksi Default'], '--', label='Prediksi Default')
+        ax1.plot(hasil_df['Tanggal'], hasil_df['Prediksi Tuned'], '--', label='Prediksi Tuned')
+        ax1.set_title("Perbandingan Harga Aktual vs Prediksi")
+        ax1.legend()
+        ax1.tick_params(axis='x', rotation=45)
+        st.pyplot(fig1)
+
     else:
-        st.warning("Silakan lakukan upload & preprocessing terlebih dahulu.")
+        st.warning("⚠️ Silakan lakukan upload & preprocessing terlebih dahulu.")
+
 
 # 6. HASIL PREDIKSI
 elif menu == "📉 Hasil Prediksi":
