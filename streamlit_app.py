@@ -287,8 +287,8 @@ elif menu == "🤖 Model":
         y_pred_default = model_default.predict(X_test_scaled)
         rmse_default, mape_default = evaluate_model(y_test, y_pred_default)
 
-        # ==================== MODEL TUNED (OPTUNA) =====================
-        fixed_params = {
+        # ======================== MODEL TUNED =========================
+        best_params = {
             'n_estimators': 200,
             'max_depth': 4,
             'learning_rate': 0.05,
@@ -301,35 +301,54 @@ elif menu == "🤖 Model":
             'objective': 'reg:squarederror'
         }
 
-        model_optuna = XGBRegressor(**fixed_params, random_state=42)
+        model_optuna = XGBRegressor(**best_params, random_state=42)
         model_optuna.fit(X_train_scaled, y_train)
         y_pred_optuna = model_optuna.predict(X_test_scaled)
         rmse_optuna, mape_optuna = evaluate_model(y_test, y_pred_optuna)
 
-        # ==================== TAMPILKAN METRIK ========================
-        st.success("✅ Model berhasil dilatih.")
+        # ====================== TAMPILKAN HASIL ========================
+        st.success("✅ Model berhasil ditraining.")
 
         st.markdown("### 📈 Perbandingan Performa Model")
-        perf_df = pd.DataFrame({
-            "Model": ["XGBoost Default", "XGBoost + Optuna"],
-            "RMSE": [f"{rmse_default:.2f}", f"{rmse_optuna:.2f}"],
-            "MAPE": [f"{mape_default:.2f}%", f"{mape_optuna:.2f}%"]
-        })
-        st.table(perf_df)
+        st.markdown(f"""
+        | Model                  | RMSE     | MAPE    |
+        |------------------------|----------|---------|
+        | **XGBoost Default**    | {rmse_default:.2f} | {mape_default:.2f}% |
+        | **XGBoost + Optuna**   | {rmse_optuna:.2f} | {mape_optuna:.2f}% |
+        """)
 
-        # =================== SIMPAN UNTUK PREDIKSI ===================
+        # ===================== SIMPAN SESSION =========================
         st.session_state.update({
             'model_default': model_default,
             'model_optuna': model_optuna,
             'X_test': X_test_scaled,
             'y_test': y_test,
-            'X_train': X_train_scaled,
             'df_features': df,
-            'scaler': scaler
+            'X_train': X_train_scaled
         })
 
+        # ===================== GRAFIK PREDIKSI ========================
+        hasil_df = pd.DataFrame({
+            'Tanggal': df.iloc[y_test.index]['tanggal'].values,
+            'Aktual': y_test.values,
+            'Prediksi Default': y_pred_default,
+            'Prediksi Tuned': y_pred_optuna
+        }).reset_index(drop=True)
+
+        hasil_df['Tanggal'] = pd.to_datetime(hasil_df['Tanggal'])
+
+        st.subheader("📉 Grafik Prediksi vs Aktual")
+        fig1, ax1 = plt.subplots(figsize=(12, 5))
+        ax1.plot(hasil_df['Tanggal'], hasil_df['Aktual'], label='Aktual', linewidth=2)
+        ax1.plot(hasil_df['Tanggal'], hasil_df['Prediksi Default'], label='Prediksi Default', linestyle='--')
+        ax1.plot(hasil_df['Tanggal'], hasil_df['Prediksi Tuned'], label='Prediksi Tuned', linestyle='--')
+        ax1.set_title("Perbandingan Harga Aktual vs Prediksi")
+        ax1.legend()
+        ax1.tick_params(axis='x', rotation=45)
+        st.pyplot(fig1)
+
     else:
-        st.warning("Silakan lakukan upload dan preprocessing terlebih dahulu.")
+        st.warning("⚠ Silakan lakukan upload dan preprocessing data terlebih dahulu.")
 
 
 
