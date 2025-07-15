@@ -349,20 +349,8 @@ elif menu == "🤖 Model":
         # Pastikan kolom Tanggal dalam format datetime
         hasil_df['Tanggal'] = pd.to_datetime(hasil_df['Tanggal'])
     
-        # Visualisasi grafik Prediksi vs Aktual
-        st.subheader("📉 Grafik Prediksi vs Aktual")
-        fig1, ax1 = plt.subplots(figsize=(12, 5))
-        ax1.plot(hasil_df['Tanggal'], hasil_df['Aktual'], label='Aktual', linewidth=2)
-        ax1.plot(hasil_df['Tanggal'], hasil_df['Prediksi Default'], label='Prediksi Default', linestyle='--')
-        ax1.plot(hasil_df['Tanggal'], hasil_df['Prediksi Tuned'], label='Prediksi Tuned', linestyle='--')
-        ax1.set_title("Perbandingan Harga Aktual vs Prediksi")
-        ax1.legend()
-        ax1.tick_params(axis='x', rotation=45)
-        st.pyplot(fig1)
-    
     else:
         st.warning("Data belum tersedia. Silakan lakukan preprocessing atau pelatihan model terlebih dahulu.")
-
 
    
 # ================ MENU: HASIL PREDIKSI ================
@@ -382,6 +370,27 @@ elif menu == "📉 Hasil Prediksi":
         # ====================
         y_pred_default = model_default.predict(X_test)
         y_pred_best = model_optuna.predict(X_test)
+
+        # ===========================
+        # Visualisasi Aktual vs Prediksi
+        # ===========================
+        st.subheader("📊 Grafik Aktual vs Prediksi (Data Uji)")
+
+        hasil_df = pd.DataFrame({
+            'Tanggal': df.iloc[y_test.index]['tanggal'].values,
+            'Aktual': y_test,
+            'Prediksi XGBoost': y_pred_default,
+            'Prediksi XGBoost + Optuna': y_pred_best
+        })
+
+        fig3, ax3 = plt.subplots(figsize=(12, 5))
+        ax3.plot(hasil_df['Tanggal'], hasil_df['Aktual'], label='Aktual', linewidth=2)
+        ax3.plot(hasil_df['Tanggal'], hasil_df['Prediksi XGBoost'], label='Prediksi XGBoost', linestyle='--')
+        ax3.plot(hasil_df['Tanggal'], hasil_df['Prediksi XGBoost + Optuna'], label='Prediksi Tuned', linestyle='--')
+        ax3.set_title("Perbandingan Harga Aktual vs Prediksi (Data Uji)")
+        ax3.legend()
+        ax3.tick_params(axis='x', rotation=45)
+        st.pyplot(fig3)
 
         # ================================
         # Prediksi 14 Hari ke Depan (berbasis lag)
@@ -437,26 +446,6 @@ elif menu == "📉 Hasil Prediksi":
         ax2.tick_params(axis='x', rotation=45)
         st.pyplot(fig2)
 
-        # ===========================
-        # Visualisasi Aktual vs Prediksi
-        # ===========================
-        st.subheader("📊 Grafik Aktual vs Prediksi (Data Uji)")
-
-        hasil_df = pd.DataFrame({
-            'Tanggal': df.iloc[y_test.index]['tanggal'].values,
-            'Aktual': y_test,
-            'Prediksi XGBoost': y_pred_default,
-            'Prediksi XGBoost + Optuna': y_pred_best
-        })
-
-        fig3, ax3 = plt.subplots(figsize=(12, 5))
-        ax3.plot(hasil_df['Tanggal'], hasil_df['Aktual'], label='Aktual', linewidth=2)
-        ax3.plot(hasil_df['Tanggal'], hasil_df['Prediksi XGBoost'], label='Prediksi XGBoost', linestyle='--')
-        ax3.plot(hasil_df['Tanggal'], hasil_df['Prediksi XGBoost + Optuna'], label='Prediksi Tuned', linestyle='--')
-        ax3.set_title("Perbandingan Harga Aktual vs Prediksi (Data Uji)")
-        ax3.legend()
-        ax3.tick_params(axis='x', rotation=45)
-        st.pyplot(fig3)
 
     else:
         st.warning("Model dan data belum tersedia. Harap lakukan preprocessing dan pelatihan model terlebih dahulu.")
