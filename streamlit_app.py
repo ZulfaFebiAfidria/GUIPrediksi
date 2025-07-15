@@ -391,35 +391,49 @@ elif menu == "📉 Hasil Prediksi":
         ax3.tick_params(axis='x', rotation=45)
         st.pyplot(fig3)
 
-                # ================================ 
-        # Prediksi 14 Hari ke Depan 
+        # ================================
+        # Prediksi 14 Hari ke Depan (Lag Only)
         # ================================
         st.subheader("📅 Prediksi 14 Hari ke Depan")
 
         n_lags = 7
-        target_col = 'daging'  # pakai kolom 'daging' yang sudah di-preprocessing
+        target_col = 'daging'  # kolom target yang sudah dinormalisasi sebelumnya
 
-        # 1. Buat Data Lag
+        # Buat data lag
         df_lag = df[[target_col]].copy()
         for i in range(1, n_lags + 1):
             df_lag[f'lag_{i}'] = df_lag[target_col].shift(i)
-
         df_lag.dropna(inplace=True)
 
         X_lag = df_lag[[f'lag_{i}' for i in range(1, n_lags + 1)]]
         y_lag = df_lag[target_col]
 
-        X_train_lag, X_test_lag, y_train_lag, y_test_lag = train_test_split(X_lag, y_lag, test_size=0.2, shuffle=False)
+        # Split dan scaling
+        from sklearn.model_selection import train_test_split
+        from sklearn.preprocessing import StandardScaler
 
+        X_train_lag, X_test_lag, y_train_lag, y_test_lag = train_test_split(X_lag, y_lag, test_size=0.2, shuffle=False)
         scaler_lag = StandardScaler()
         X_train_scaled_lag = scaler_lag.fit_transform(X_train_lag)
         X_test_scaled_lag = scaler_lag.transform(X_test_lag)
 
-        # 2. Latih ulang best_model dengan fitur lag
-        model_lag = XGBRegressor(**model_optuna.get_params())  # gunakan parameter dari model_optuna
+        # Gunakan parameter yang sama persis dari model_optuna
+        model_lag = XGBRegressor(
+            n_estimators=200,
+            max_depth=4,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            gamma=0,
+            reg_alpha=0.5,
+            reg_lambda=1,
+            min_child_weight=1,
+            objective='reg:squarederror',
+            random_state=42
+        )
         model_lag.fit(X_train_scaled_lag, y_train_lag)
 
-        # 3. Prediksi 14 hari ke depan
+        # Prediksi 14 hari ke depan
         last_known = df[target_col].iloc[-n_lags:].tolist()
         future_preds = []
 
@@ -430,13 +444,14 @@ elif menu == "📉 Hasil Prediksi":
             future_preds.append(round(float(next_pred), 2))
             last_known.append(next_pred)
 
-        # Ambil data historis terakhir
+        # Ambil 14 hari terakhir dari data historis
         historical_days = 14
         historical_data = df[target_col].iloc[-historical_days:].tolist()
 
-        days = list(range(-historical_days + 1, 14 + 1))  # -13 to 14
+        # Buat sumbu x dari -13 s.d. 14
+        days = list(range(-historical_days + 1, 14 + 1))  # -13 s.d. 14
 
-        # 4. Visualisasi
+        # Visualisasi grafik
         st.subheader("📈 Grafik Prediksi 14 Hari ke Depan")
         fig2, ax2 = plt.subplots(figsize=(12, 6))
         ax2.plot(days[:historical_days], historical_data, label='Data Aktual Sebelumnya', marker='o')
@@ -449,13 +464,18 @@ elif menu == "📉 Hasil Prediksi":
         ax2.grid(True)
         st.pyplot(fig2)
 
-        # 5. Tabel
+        # Tabel hasil prediksi
         st.subheader("📋 Tabel Hasil Prediksi 14 Hari ke Depan")
         pred_table = pd.DataFrame({
             'Hari ke-': [f'Hari ke-{i+1}' for i in range(14)],
             'Prediksi Harga (Rp)': [f"Rp{pred:,.2f}" for pred in future_preds]
         })
         st.table(pred_table)
+
+        # Debug output (opsional)
+        with st.expander("📢 Debug Output (Hasil Prediksi Mentah)"):
+            for i, val in enumerate(future_preds, 1):
+                st.write(f"Hari ke-{i}: Rp{val:,.2f}")
 
     else:
         st.warning("Model dan data belum tersedia. Harap lakukan preprocessing dan pelatihan model terlebih dahulu.")
