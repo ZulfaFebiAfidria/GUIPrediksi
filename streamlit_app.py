@@ -273,7 +273,9 @@ elif menu == "🤖 Model":
             mape = mean_absolute_percentage_error(y_true, y_pred) * 100
             return rmse, mape
 
-        # ======================== MODEL DEFAULT ========================
+        # ========================
+        # MODEL DEFAULT
+        # ========================
         model_default = XGBRegressor(
             n_estimators=100,
             learning_rate=0.1,
@@ -287,8 +289,10 @@ elif menu == "🤖 Model":
         y_pred_default = model_default.predict(X_test_scaled)
         rmse_default, mape_default = evaluate_model(y_test, y_pred_default)
 
-        # ======================== MODEL TUNED =========================
-        best_params = {
+        # ========================
+        # MODEL TUNED
+        # ========================
+        tuned_params = {
             'n_estimators': 200,
             'max_depth': 4,
             'learning_rate': 0.05,
@@ -301,54 +305,51 @@ elif menu == "🤖 Model":
             'objective': 'reg:squarederror'
         }
 
-        model_optuna = XGBRegressor(**best_params, random_state=42)
-        model_optuna.fit(X_train_scaled, y_train)
-        y_pred_optuna = model_optuna.predict(X_test_scaled)
-        rmse_optuna, mape_optuna = evaluate_model(y_test, y_pred_optuna)
+        model_tuned = XGBRegressor(**tuned_params, random_state=42)
+        model_tuned.fit(X_train_scaled, y_train)
+        y_pred_tuned = model_tuned.predict(X_test_scaled)
+        rmse_tuned, mape_tuned = evaluate_model(y_test, y_pred_tuned)
 
-        # ====================== TAMPILKAN HASIL ========================
-        st.success("✅ Model berhasil ditraining.")
+        st.success("✅ Model selesai ditraining.")
 
         st.markdown("### 📈 Perbandingan Performa Model")
         st.markdown(f"""
         | Model                  | RMSE     | MAPE    |
         |------------------------|----------|---------|
         | **XGBoost Default**    | {rmse_default:.2f} | {mape_default:.2f}% |
-        | **XGBoost + Optuna**   | {rmse_optuna:.2f} | {mape_optuna:.2f}% |
+        | **XGBoost Tuned**      | {rmse_tuned:.2f} | {mape_tuned:.2f}% |
         """)
 
-        # ===================== SIMPAN SESSION =========================
-        st.session_state.update({
-            'model_default': model_default,
-            'model_optuna': model_optuna,
-            'X_test': X_test_scaled,
-            'y_test': y_test,
-            'df_features': df,
-            'X_train': X_train_scaled
-        })
+        # Simpan ke session state
+        st.session_state['model_default'] = model_default
+        st.session_state['model_optuna'] = model_tuned
+        st.session_state['X_test'] = X_test_scaled
+        st.session_state['y_test'] = y_test
+        st.session_state['X_train'] = pd.DataFrame(X_train_scaled, columns=X.columns)
 
-        # ===================== GRAFIK PREDIKSI ========================
+        # Buat dataframe hasil prediksi
+        tanggal_pred = df.iloc[-len(y_test):]['tanggal'].values
         hasil_df = pd.DataFrame({
-            'Tanggal': df.iloc[y_test.index]['tanggal'].values,
+            'Tanggal': pd.to_datetime(tanggal_pred),
             'Aktual': y_test.values,
             'Prediksi Default': y_pred_default,
-            'Prediksi Tuned': y_pred_optuna
-        }).reset_index(drop=True)
+            'Prediksi Tuned': y_pred_tuned
+        })
 
-        hasil_df['Tanggal'] = pd.to_datetime(hasil_df['Tanggal'])
-
+        # Visualisasi
         st.subheader("📉 Grafik Prediksi vs Aktual")
-        fig1, ax1 = plt.subplots(figsize=(12, 5))
-        ax1.plot(hasil_df['Tanggal'], hasil_df['Aktual'], label='Aktual', linewidth=2)
-        ax1.plot(hasil_df['Tanggal'], hasil_df['Prediksi Default'], label='Prediksi Default', linestyle='--')
-        ax1.plot(hasil_df['Tanggal'], hasil_df['Prediksi Tuned'], label='Prediksi Tuned', linestyle='--')
-        ax1.set_title("Perbandingan Harga Aktual vs Prediksi")
-        ax1.legend()
-        ax1.tick_params(axis='x', rotation=45)
-        st.pyplot(fig1)
+        fig, ax = plt.subplots(figsize=(12, 5))
+        ax.plot(hasil_df['Tanggal'], hasil_df['Aktual'], label='Aktual', linewidth=2)
+        ax.plot(hasil_df['Tanggal'], hasil_df['Prediksi Default'], label='Prediksi Default', linestyle='--')
+        ax.plot(hasil_df['Tanggal'], hasil_df['Prediksi Tuned'], label='Prediksi Tuned', linestyle='--')
+        ax.set_title("Perbandingan Harga Aktual vs Prediksi")
+        ax.legend()
+        ax.tick_params(axis='x', rotation=45)
+        st.pyplot(fig)
 
     else:
-        st.warning("⚠ Silakan lakukan upload dan preprocessing data terlebih dahulu.")
+        st.warning("Silakan lakukan preprocessing terlebih dahulu.")
+
 
 
 
