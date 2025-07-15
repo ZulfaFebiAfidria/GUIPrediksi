@@ -353,67 +353,73 @@ elif menu == "🤖 Model":
 
 
 # 6. HASIL PREDIKSI
+el# ================ MENU: HASIL PREDIKSI ================ 
 elif menu == "📉 Hasil Prediksi":
     st.header("📉 Hasil Prediksi")
 
-    required = ['model_default','model_optuna','X_test','y_test','X_train','df_features']
-    if all(k in st.session_state for k in required):
+    if all(k in st.session_state for k in ['model_default', 'model_optuna', 'X_test', 'y_test', 'X_train', 'df_clean']):
         model_default = st.session_state['model_default']
-        model_opt = st.session_state['model_optuna']
+        model_optuna = st.session_state['model_optuna']
         X_test = st.session_state['X_test']
         y_test = st.session_state['y_test']
         X_train = st.session_state['X_train']
-        df = st.session_state['df_features']
+        df = st.session_state['df_clean']
 
-        # Prediksi vs Aktual
-        y_pred_def = model_default.predict(X_test)
-        y_pred_opt = model_opt.predict(X_test)
+        # ====================
+        # Prediksi Model
+        # ====================
+        y_pred_default = model_default.predict(X_test)
+        y_pred_best = model_optuna.predict(X_test)
 
-        hasil = pd.DataFrame({
-            'Tanggal': df.iloc[-len(y_test):]['tanggal'].values,
-            'Aktual': y_test.values,
-            'Default': y_pred_def,
-            'Tuned': y_pred_opt
-        })
-        hasil['Tanggal'] = pd.to_datetime(hasil['Tanggal'])
-
-        st.subheader("📉 Grafik Prediksi vs Aktual")
-        fig1, ax1 = plt.subplots(figsize=(12,5))
-        ax1.plot(hasil['Tanggal'], hasil['Aktual'], label='Aktual', linewidth=2)
-        ax1.plot(hasil['Tanggal'], hasil['Default'], '--', label='Prediksi Default')
-        ax1.plot(hasil['Tanggal'], hasil['Tuned'], '--', label='Prediksi Tuned')
-        ax1.legend(); ax1.tick_params(axis='x', rotation=45)
-        st.pyplot(fig1)
-
-        # Prediksi 14 hari mendatang
+        # ================================
+        # Prediksi 14 Hari ke Depan
+        # ================================
         st.subheader("📅 Prediksi 14 Hari ke Depan")
-        last_input = X_train[-1:].copy()
-        future_def, future_opt, future_dates = [], [], []
+
+        last_input = X_train[-1:]  # ambil input terakhir dalam bentuk array
+        future_preds_default = []
+        future_preds_optuna = []
+        future_dates = []
+
+        # Ambil tanggal terakhir dari data asli
         last_date = df['tanggal'].max()
 
         for i in range(14):
-            p_def = model_default.predict(last_input)[0]
-            p_opt = model_opt.predict(last_input)[0]
-            future_def.append(p_def); future_opt.append(p_opt)
-            last_date += datetime.timedelta(days=1)
-            future_dates.append(last_date)
+            # Prediksi
+            pred_def = model_default.predict(last_input)[0]
+            pred_opt = model_optuna.predict(last_input)[0]
 
-            # update last_input shifting features appropriately!
-            # Misal: hanya shift lag dan pctchange, tapi cukup kalau tidak forecast fitur dinamis
+            future_preds_default.append(pred_def)
+            future_preds_optuna.append(pred_opt)
 
-        df_fut = pd.DataFrame({
+            # Tambahkan tanggal prediksi
+            next_date = last_date + pd.Timedelta(days=i + 1)
+            future_dates.append(next_date)
+
+            # Buat input baru dari hasil prediksi sebelumnya
+            # Asumsi sederhana: fitur input tetap sama karena tidak punya data masa depan
+            # (jika kamu ingin update fitur lag, rolling, dsb, kamu harus simulasikan data)
+
+        # DataFrame hasil prediksi
+        future_df = pd.DataFrame({
             'Tanggal': future_dates,
-            'XGBoost': future_def,
-            'XGBoost+Optuna': future_opt
+            'Prediksi XGBoost': future_preds_default,
+            'Prediksi XGBoost + Optuna': future_preds_optuna
         })
-        st.dataframe(df_fut)
 
+        # Tampilkan tabel prediksi
+        st.dataframe(future_df)
+
+        # Visualisasi
         st.subheader("📈 Grafik Prediksi 14 Hari ke Depan")
-        fig2, ax2 = plt.subplots(figsize=(12,5))
-        ax2.plot(df_fut['Tanggal'], df_fut['XGBoost'], label='XGBoost')
-        ax2.plot(df_fut['Tanggal'], df_fut['XGBoost+Optuna'], label='XGBoost+Optuna')
-        ax2.legend(); ax2.tick_params(axis='x', rotation=45)
+        fig2, ax2 = plt.subplots(figsize=(12, 5))
+        ax2.plot(future_df['Tanggal'], future_df['Prediksi XGBoost'], label='XGBoost')
+        ax2.plot(future_df['Tanggal'], future_df['Prediksi XGBoost + Optuna'], label='XGBoost + Optuna')
+        ax2.set_title("Prediksi Harga Daging Ayam 14 Hari ke Depan")
+        ax2.legend()
+        ax2.tick_params(axis='x', rotation=45)
         st.pyplot(fig2)
 
     else:
-        st.warning("Model/data belum tersedia. Silakan jalankan model terlebih dahulu.")
+        st.warning("Model dan data belum tersedia. Harap lakukan preprocessing dan pelatihan model terlebih dahulu.")
+
