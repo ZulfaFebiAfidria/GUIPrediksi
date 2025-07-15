@@ -365,7 +365,7 @@ elif menu == "🤖 Model":
 
 
    
-# ================ MENU: HASIL PREDIKSI ================ 
+# ================ MENU: HASIL PREDIKSI ================
 elif menu == "📉 Hasil Prediksi":
     st.header("📉 Hasil Prediksi")
 
@@ -378,63 +378,68 @@ elif menu == "📉 Hasil Prediksi":
         df = st.session_state['df_clean']  # dataframe yang sudah dibersihkan
 
         # ====================
-        # Prediksi Model
+        # Prediksi Model (uji)
         # ====================
         y_pred_default = model_default.predict(X_test)
         y_pred_best = model_optuna.predict(X_test)
 
         # ================================
-        # Prediksi 14 Hari ke Depan
+        # Prediksi 14 Hari ke Depan (berbasis lag)
         # ================================
         st.subheader("📅 Prediksi 14 Hari ke Depan")
 
-        # ✅ Perbaikan error: ubah numpy ke DataFrame
-        last_known_input = pd.DataFrame([X_train[-1]], columns=[f"f{i}" for i in range(X_train.shape[1])])
+        n_lags = 7
+        df_lag = df[['daging']].copy()
+        for i in range(1, n_lags + 1):
+            df_lag[f'lag_{i}'] = df_lag['daging'].shift(i)
 
-        future_preds_default = []
-        future_preds_optuna = []
+        df_lag.dropna(inplace=True)
+
+        X_lag = df_lag[[f'lag_{i}' for i in range(1, n_lags + 1)]]
+        y_lag = df_lag['daging']
+
+        X_train_lag, X_test_lag, y_train_lag, y_test_lag = train_test_split(X_lag, y_lag, test_size=0.2, shuffle=False)
+
+        scaler_lag = StandardScaler()
+        X_train_scaled_lag = scaler_lag.fit_transform(X_train_lag)
+        X_test_scaled_lag = scaler_lag.transform(X_test_lag)
+
+        model_lag = XGBRegressor(random_state=42)
+        model_lag.fit(X_train_scaled_lag, y_train_lag)
+
+        last_known = df['daging'].iloc[-n_lags:].tolist()
+        future_preds = []
         future_dates = []
 
         last_date = df['tanggal'].max() if 'tanggal' in df.columns else datetime.date.today()
 
         for i in range(14):
-            # Prediksi
-            pred_default = model_default.predict(last_known_input)[0]
-            pred_optuna = model_optuna.predict(last_known_input)[0]
+            input_lags = pd.DataFrame([last_known[-n_lags:]], columns=[f'lag_{i}' for i in range(1, n_lags + 1)])
+            input_scaled = scaler_lag.transform(input_lags)
+            next_pred = model_lag.predict(input_scaled)[0]
+            future_preds.append(float(round(next_pred, 2)))
+            last_known.append(next_pred)
+            future_dates.append(last_date + datetime.timedelta(days=i + 1))
 
-            # Simpan hasil prediksi
-            future_preds_default.append(pred_default)
-            future_preds_optuna.append(pred_optuna)
-
-            # Tanggal prediksi
-            next_date = last_date + datetime.timedelta(days=i + 1)
-            future_dates.append(next_date)
-
-            # Catatan: Jika kamu pakai fitur lag, update last_known_input di sini
-
-        # DataFrame hasil prediksi 14 hari
         future_df = pd.DataFrame({
             'Tanggal': future_dates,
-            'Prediksi XGBoost': future_preds_default,
-            'Prediksi XGBoost + Optuna': future_preds_optuna
+            'Prediksi Harga Daging Ayam': future_preds
         })
 
-        # Tampilkan tabel
         st.dataframe(future_df)
 
         # Visualisasi grafik
         st.subheader("📈 Grafik Prediksi 14 Hari ke Depan")
         fig2, ax2 = plt.subplots(figsize=(12, 5))
-        ax2.plot(future_df['Tanggal'], future_df['Prediksi XGBoost'], label='XGBoost')
-        ax2.plot(future_df['Tanggal'], future_df['Prediksi XGBoost + Optuna'], label='XGBoost + Optuna')
+        ax2.plot(future_df['Tanggal'], future_df['Prediksi Harga Daging Ayam'], label='Prediksi Harga')
         ax2.set_title("Prediksi Harga Daging Ayam 14 Hari ke Depan")
         ax2.legend()
         ax2.tick_params(axis='x', rotation=45)
         st.pyplot(fig2)
 
-        # ========================================
-        # Tambahan Visualisasi: Prediksi vs Aktual
-        # ========================================
+        # ===========================
+        # Visualisasi Aktual vs Prediksi
+        # ===========================
         st.subheader("📊 Grafik Aktual vs Prediksi (Data Uji)")
 
         hasil_df = pd.DataFrame({
@@ -455,4 +460,3 @@ elif menu == "📉 Hasil Prediksi":
 
     else:
         st.warning("Model dan data belum tersedia. Harap lakukan preprocessing dan pelatihan model terlebih dahulu.")
-
