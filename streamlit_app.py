@@ -311,6 +311,13 @@ elif menu == "🤖 Model":
         rmse_best, mape_best = 304.29, 0.31 
 
         st.success("✅ Model selesai ditraining.")
+        # Simpan model dan data ke session_state agar bisa diakses oleh halaman hasil prediksi
+        st.session_state['model_default'] = model_default
+        st.session_state['model_optuna'] = best_model
+        st.session_state['X_test'] = X_test_scaled
+        st.session_state['X_train'] = X_train_scaled
+        st.session_state['y_test'] = y_test
+
 
         st.markdown("### 📈 Perbandingan Performa Model")
         st.markdown(f"""
